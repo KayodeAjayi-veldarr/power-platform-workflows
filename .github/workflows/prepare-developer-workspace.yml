@@ -1,0 +1,748 @@
+name: Reusable - Prepare Power Platform Developer Workspace
+
+on:
+  workflow_call:
+    inputs:
+      project_key:
+        description: Short project identifier, for example LUG-CHESS
+        required: true
+        type: string
+
+      developer_alias:
+        description: Short developer name, for example KAYODE
+        required: true
+        type: string
+
+      developer_upn:
+        description: Microsoft 365 email address of the developer
+        required: true
+        type: string
+
+      solution_name:
+        description: Power Platform solution unique name
+        required: true
+        type: string
+
+      solution_source_folder:
+        description: Folder containing the unpacked solution source
+        required: true
+        type: string
+
+      source_ref:
+        description: Trusted Git branch or tag used to prepare the environment
+        required: false
+        default: main
+        type: string
+
+      environment_type:
+        description: Developer, Sandbox or another supported environment type
+        required: false
+        default: Developer
+        type: string
+
+      environment_name:
+        description: Optional full environment name. Generated when blank.
+        required: false
+        default: ""
+        type: string
+
+      environment_domain:
+        description: Optional environment domain. Generated when blank.
+        required: false
+        default: ""
+        type: string
+
+      region:
+        description: Power Platform region
+        required: false
+        default: europe
+        type: string
+
+      currency:
+        description: Environment currency code
+        required: false
+        default: GBP
+        type: string
+
+      developer_role:
+        description: Dataverse security role assigned to the developer
+        required: false
+        default: System Administrator
+        type: string
+
+      deployment_settings_file:
+        description: Optional deployment settings JSON file
+        required: false
+        default: ""
+        type: string
+
+      recreate_environment:
+        description: Delete and recreate the environment when it already exists
+        required: false
+        default: false
+        type: boolean
+
+      next_step_message:
+        description: Project-specific instruction displayed after deployment
+        required: false
+        default: Validate the solution before beginning development.
+        type: string
+
+    secrets:
+      pp_tenant_id:
+        description: Microsoft Entra tenant ID
+        required: true
+
+      pp_app_id:
+        description: Automation application ID
+        required: true
+
+      pp_client_secret:
+        description: Automation application client secret
+        required: true
+
+    outputs:
+      environment_name:
+        description: Name of the prepared environment
+        value: ${{ jobs.prepare-workspace.outputs.environment_name }}
+
+      environment_url:
+        description: URL of the prepared environment
+        value: ${{ jobs.prepare-workspace.outputs.environment_url }}
+
+jobs:
+  prepare-workspace:
+    name: Prepare Power Platform developer workspace
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    outputs:
+      environment_name: ${{ steps.workspace_names.outputs.environment_name }}
+      environment_url: ${{ steps.environment_details.outputs.environment_url }}
+
+    steps:
+      - name: Check out trusted project source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - name: Install Power Platform tools
+        uses: microsoft/powerplatform-actions/actions-install@v1
+
+      - name: Validate inputs and source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $allowedEnvironmentTypes = @(
+            "Developer",
+            "Sandbox",
+            "Production",
+            "Trial",
+            "Teams",
+            "SubscriptionBasedTrial"
+          )
+
+          if (
+            $allowedEnvironmentTypes -notcontains
+            "${{ inputs.environment_type }}"
+          ) {
+            throw "Unsupported environment type: ${{ inputs.environment_type }}"
+          }
+
+          if (-not (Test-Path "${{ inputs.solution_source_folder }}")) {
+            throw @"
+          Solution source folder not found:
+
+          ${{ inputs.solution_source_folder }}
+
+          Confirm that the caller supplied the correct folder.
+          "@
+          }
+
+          Write-Host "Power Platform CLI version:"
+          pac --version
+
+          Write-Host "Project key: ${{ inputs.project_key }}"
+          Write-Host "Solution: ${{ inputs.solution_name }}"
+          Write-Host "Source folder: ${{ inputs.solution_source_folder }}"
+
+      - name: Generate workspace names
+        id: workspace_names
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Convert-ToSafeName {
+            param(
+              [Parameter(Mandatory)]
+              [string]$Value
+            )
+
+            $safeValue = $Value.ToUpperInvariant()
+            $safeValue = $safeValue -replace '[^A-Z0-9-]', '-'
+            $safeValue = $safeValue -replace '-+', '-'
+            return $safeValue.Trim('-')
+          }
+
+          function Convert-ToSafeDomain {
+            param(
+              [Parameter(Mandatory)]
+              [string]$Value
+            )
+
+            $safeValue = $Value.ToLowerInvariant()
+            $safeValue = $safeValue -replace '[^a-z0-9-]', '-'
+            $safeValue = $safeValue -replace '-+', '-'
+            return $safeValue.Trim('-')
+          }
+
+          $projectKey = Convert-ToSafeName `
+            -Value "${{ inputs.project_key }}"
+
+          $developerAlias = Convert-ToSafeName `
+            -Value "${{ inputs.developer_alias }}"
+
+          $requestedName = "${{ inputs.environment_name }}"
+          $requestedDomain = "${{ inputs.environment_domain }}"
+
+          if ([string]::IsNullOrWhiteSpace($requestedName)) {
+            $environmentName = "$projectKey-$developerAlias-DEV"
+          }
+          else {
+            $environmentName = $requestedName
+          }
+
+          if ([string]::IsNullOrWhiteSpace($requestedDomain)) {
+            $environmentDomain = Convert-ToSafeDomain `
+              -Value "$projectKey-$developerAlias-dev"
+          }
+          else {
+            $environmentDomain = Convert-ToSafeDomain `
+              -Value $requestedDomain
+          }
+
+          Write-Host "Environment name: $environmentName"
+          Write-Host "Environment domain: $environmentDomain"
+
+          "environment_name=$environmentName" |
+            Out-File `
+              -FilePath $env:GITHUB_OUTPUT `
+              -Encoding utf8 `
+              -Append
+
+          "environment_domain=$environmentDomain" |
+            Out-File `
+              -FilePath $env:GITHUB_OUTPUT `
+              -Encoding utf8 `
+              -Append
+
+      - name: Authenticate for Power Platform administration
+        shell: pwsh
+        env:
+          PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          PP_APP_ID: ${{ secrets.pp_app_id }}
+          PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          foreach ($variableName in @(
+            "PP_TENANT_ID",
+            "PP_APP_ID",
+            "PP_CLIENT_SECRET"
+          )) {
+            $value = Get-Item "Env:$variableName" `
+              -ErrorAction SilentlyContinue
+
+            if (
+              $null -eq $value -or
+              [string]::IsNullOrWhiteSpace($value.Value)
+            ) {
+              throw "Required secret $variableName is missing."
+            }
+          }
+
+          pac auth create `
+            --name "GitHub-PP-Admin" `
+            --applicationId "$env:PP_APP_ID" `
+            --clientSecret "$env:PP_CLIENT_SECRET" `
+            --tenant "$env:PP_TENANT_ID"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Power Platform administration authentication failed."
+          }
+
+          pac auth who
+
+      - name: Find the existing environment
+        id: find_environment
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $environmentName = `
+            "${{ steps.workspace_names.outputs.environment_name }}"
+
+          $rawOutput = & pac admin list `
+            --name "$environmentName" `
+            --json
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to retrieve Power Platform environments."
+          }
+
+          $jsonText = $rawOutput -join "`n"
+
+          if ([string]::IsNullOrWhiteSpace($jsonText)) {
+            "exists=false" |
+              Out-File `
+                -FilePath $env:GITHUB_OUTPUT `
+                -Encoding utf8 `
+                -Append
+
+            exit 0
+          }
+
+          try {
+            $parsedResult = $jsonText | ConvertFrom-Json
+          }
+          catch {
+            Write-Host $jsonText
+            throw "The environment list was not valid JSON."
+          }
+
+          if ($null -ne $parsedResult.value) {
+            $environments = @($parsedResult.value)
+          }
+          else {
+            $environments = @($parsedResult)
+          }
+
+          function Get-PropertyValue {
+            param(
+              [object]$Object,
+              [string[]]$Names
+            )
+
+            foreach ($name in $Names) {
+              $property = $Object.PSObject.Properties[$name]
+
+              if (
+                $null -ne $property -and
+                -not [string]::IsNullOrWhiteSpace(
+                  [string]$property.Value
+                )
+              ) {
+                return [string]$property.Value
+              }
+            }
+
+            return $null
+          }
+
+          $matchingEnvironment = $null
+
+          foreach ($environment in $environments) {
+            $name = Get-PropertyValue `
+              -Object $environment `
+              -Names @(
+                "Environment",
+                "DisplayName",
+                "EnvironmentName",
+                "FriendlyName"
+              )
+
+            if ($name -eq $environmentName) {
+              $matchingEnvironment = $environment
+              break
+            }
+          }
+
+          if ($null -eq $matchingEnvironment) {
+            Write-Host "Environment does not currently exist."
+
+            "exists=false" |
+              Out-File `
+                -FilePath $env:GITHUB_OUTPUT `
+                -Encoding utf8 `
+                -Append
+
+            exit 0
+          }
+
+          $environmentId = Get-PropertyValue `
+            -Object $matchingEnvironment `
+            -Names @(
+              "EnvironmentId",
+              "Environment Id",
+              "Id"
+            )
+
+          $environmentUrl = Get-PropertyValue `
+            -Object $matchingEnvironment `
+            -Names @(
+              "EnvironmentUrl",
+              "Environment Url",
+              "Url"
+            )
+
+          Write-Host "Existing environment found."
+          Write-Host "Environment ID: $environmentId"
+          Write-Host "Environment URL: $environmentUrl"
+
+          "exists=true" |
+            Out-File `
+              -FilePath $env:GITHUB_OUTPUT `
+              -Encoding utf8 `
+              -Append
+
+          "environment_id=$environmentId" |
+            Out-File `
+              -FilePath $env:GITHUB_OUTPUT `
+              -Encoding utf8 `
+              -Append
+
+          "environment_url=$environmentUrl" |
+            Out-File `
+              -FilePath $env:GITHUB_OUTPUT `
+              -Encoding utf8 `
+              -Append
+
+      - name: Delete the existing environment when requested
+        if: >
+          inputs.recreate_environment &&
+          steps.find_environment.outputs.exists == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $environmentId = `
+            "${{ steps.find_environment.outputs.environment_id }}"
+
+          if ([string]::IsNullOrWhiteSpace($environmentId)) {
+            throw "The existing environment ID could not be identified."
+          }
+
+          Write-Host "Deleting the existing project environment."
+
+          pac admin delete `
+            --environment "$environmentId" `
+            --max-async-wait-time 60
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "The existing environment could not be deleted."
+          }
+
+      - name: Create the environment when required
+        if: >
+          steps.find_environment.outputs.exists == 'false' ||
+          inputs.recreate_environment
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $environmentName = `
+            "${{ steps.workspace_names.outputs.environment_name }}"
+
+          $environmentDomain = `
+            "${{ steps.workspace_names.outputs.environment_domain }}"
+
+          Write-Host "Creating environment: $environmentName"
+
+          pac admin create `
+            --name "$environmentName" `
+            --type "${{ inputs.environment_type }}" `
+            --region "${{ inputs.region }}" `
+            --currency "${{ inputs.currency }}" `
+            --domain "$environmentDomain" `
+            --user "${{ inputs.developer_upn }}" `
+            --max-async-wait-time 60 `
+            --json
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "The Power Platform environment could not be created."
+          }
+
+      - name: Retrieve prepared environment details
+        id: environment_details
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $environmentName = `
+            "${{ steps.workspace_names.outputs.environment_name }}"
+
+          function Get-PropertyValue {
+            param(
+              [object]$Object,
+              [string[]]$Names
+            )
+
+            foreach ($name in $Names) {
+              $property = $Object.PSObject.Properties[$name]
+
+              if (
+                $null -ne $property -and
+                -not [string]::IsNullOrWhiteSpace(
+                  [string]$property.Value
+                )
+              ) {
+                return [string]$property.Value
+              }
+            }
+
+            return $null
+          }
+
+          $environmentId = $null
+          $environmentUrl = $null
+
+          for ($attempt = 1; $attempt -le 20; $attempt++) {
+            Write-Host "Environment lookup attempt $attempt of 20."
+
+            $rawOutput = & pac admin list `
+              --name "$environmentName" `
+              --json
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to retrieve Power Platform environments."
+            }
+
+            $jsonText = $rawOutput -join "`n"
+
+            if (-not [string]::IsNullOrWhiteSpace($jsonText)) {
+              $parsedResult = $jsonText | ConvertFrom-Json
+
+              if ($null -ne $parsedResult.value) {
+                $environments = @($parsedResult.value)
+              }
+              else {
+                $environments = @($parsedResult)
+              }
+
+              foreach ($environment in $environments) {
+                $name = Get-PropertyValue `
+                  -Object $environment `
+                  -Names @(
+                    "Environment",
+                    "DisplayName",
+                    "EnvironmentName",
+                    "FriendlyName"
+                  )
+
+                if ($name -ne $environmentName) {
+                  continue
+                }
+
+                $environmentId = Get-PropertyValue `
+                  -Object $environment `
+                  -Names @(
+                    "EnvironmentId",
+                    "Environment Id",
+                    "Id"
+                  )
+
+                $environmentUrl = Get-PropertyValue `
+                  -Object $environment `
+                  -Names @(
+                    "EnvironmentUrl",
+                    "Environment Url",
+                    "Url"
+                  )
+
+                break
+              }
+            }
+
+            if (
+              -not [string]::IsNullOrWhiteSpace($environmentId) -and
+              -not [string]::IsNullOrWhiteSpace($environmentUrl)
+            ) {
+              break
+            }
+
+            Start-Sleep -Seconds 30
+          }
+
+          if ([string]::IsNullOrWhiteSpace($environmentId)) {
+            throw "The prepared environment ID could not be identified."
+          }
+
+          if ([string]::IsNullOrWhiteSpace($environmentUrl)) {
+            throw "The prepared environment URL could not be identified."
+          }
+
+          Write-Host "Environment ID: $environmentId"
+          Write-Host "Environment URL: $environmentUrl"
+
+          "environment_id=$environmentId" |
+            Out-File `
+              -FilePath $env:GITHUB_OUTPUT `
+              -Encoding utf8 `
+              -Append
+
+          "environment_url=$environmentUrl" |
+            Out-File `
+              -FilePath $env:GITHUB_OUTPUT `
+              -Encoding utf8 `
+              -Append
+
+      - name: Assign the automation application user
+        shell: pwsh
+        env:
+          PP_APP_ID: ${{ secrets.pp_app_id }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          pac admin assign-user `
+            --environment "${{ steps.environment_details.outputs.environment_id }}" `
+            --user "$env:PP_APP_ID" `
+            --role "System Administrator" `
+            --application-user
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "The automation application user could not be assigned."
+          }
+
+      - name: Assign the developer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          pac admin assign-user `
+            --environment "${{ steps.environment_details.outputs.environment_id }}" `
+            --user "${{ inputs.developer_upn }}" `
+            --role "${{ inputs.developer_role }}"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "The developer could not be assigned."
+          }
+
+      - name: Pack the project solution
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $outputFolder = Join-Path `
+            $env:RUNNER_TEMP `
+            "power-platform-solutions"
+
+          New-Item `
+            -ItemType Directory `
+            -Path $outputFolder `
+            -Force |
+            Out-Null
+
+          $solutionZip = Join-Path `
+            $outputFolder `
+            "${{ inputs.solution_name }}.zip"
+
+          pac solution pack `
+            --zipfile "$solutionZip" `
+            --folder "${{ inputs.solution_source_folder }}" `
+            --packagetype Unmanaged
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "The Power Platform solution could not be packed."
+          }
+
+          if (-not (Test-Path $solutionZip)) {
+            throw "The solution package was not created."
+          }
+
+          "SOLUTION_ZIP=$solutionZip" |
+            Out-File `
+              -FilePath $env:GITHUB_ENV `
+              -Encoding utf8 `
+              -Append
+
+      - name: Authenticate to the target environment
+        shell: pwsh
+        env:
+          PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          PP_APP_ID: ${{ secrets.pp_app_id }}
+          PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          pac auth create `
+            --name "GitHub-PP-Target" `
+            --applicationId "$env:PP_APP_ID" `
+            --clientSecret "$env:PP_CLIENT_SECRET" `
+            --tenant "$env:PP_TENANT_ID" `
+            --environment "${{ steps.environment_details.outputs.environment_url }}"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Authentication to the target environment failed."
+          }
+
+          pac auth who
+
+      - name: Import the project solution
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $arguments = @(
+            "solution",
+            "import",
+            "--path",
+            "$env:SOLUTION_ZIP",
+            "--environment",
+            "${{ steps.environment_details.outputs.environment_url }}",
+            "--force-overwrite",
+            "--publish-changes",
+            "--async",
+            "--max-async-wait-time",
+            "60"
+          )
+
+          $settingsFile = "${{ inputs.deployment_settings_file }}"
+
+          if (-not [string]::IsNullOrWhiteSpace($settingsFile)) {
+            if (-not (Test-Path $settingsFile)) {
+              throw "Deployment settings file not found: $settingsFile"
+            }
+
+            $arguments += @(
+              "--settings-file",
+              $settingsFile
+            )
+          }
+
+          & pac @arguments
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "The Power Platform solution could not be imported."
+          }
+
+      - name: Create workspace summary
+        shell: pwsh
+        run: |
+          @"
+          # Developer workspace ready
+
+          **Project:** ${{ inputs.project_key }}
+
+          **Developer:** ${{ inputs.developer_upn }}
+
+          **Environment:** ${{ steps.workspace_names.outputs.environment_name }}
+
+          **Environment type:** ${{ inputs.environment_type }}
+
+          **Environment URL:** ${{ steps.environment_details.outputs.environment_url }}
+
+          **Solution:** ${{ inputs.solution_name }}
+
+          **Source branch:** ${{ inputs.source_ref }}
+
+          **Solution type:** Unmanaged
+
+          ## Next step
+
+          ${{ inputs.next_step_message }}
+          "@ |
+            Out-File `
+              -FilePath $env:GITHUB_STEP_SUMMARY `
+              -Encoding utf8 `
+              -Append
