@@ -128,6 +128,8 @@ jobs:
 
       - name: Install Power Platform tools
         uses: microsoft/powerplatform-actions/actions-install@v1
+        with:
+            add-tools-to-path: true
 
       - name: Validate inputs and source
         shell: pwsh
@@ -160,8 +162,31 @@ jobs:
           "@
           }
 
-          Write-Host "Power Platform CLI version:"
-          pac --version
+          Write-Host "Checking Power Platform CLI installation..."
+
+          # Confirm that the pac executable is available to PowerShell.
+          $pacCommand = Get-Command pac -ErrorAction SilentlyContinue
+          
+          if ($null -eq $pacCommand) {
+            throw @"
+          Power Platform CLI was installed but was not added to PATH.
+          
+          Confirm that the actions-install step contains:
+          
+          with:
+            add-tools-to-path: true
+          "@
+          }
+          
+          Write-Host "PAC CLI executable:"
+          Write-Host $pacCommand.Source
+          
+          Write-Host ""
+          Write-Host "Power Platform CLI details:"
+          
+          # Running pac without a command displays its installed version
+          # and the available command groups.
+          pac
 
           Write-Host "Project key: ${{ inputs.project_key }}"
           Write-Host "Solution: ${{ inputs.solution_name }}"
