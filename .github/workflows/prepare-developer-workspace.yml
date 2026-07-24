@@ -1,32 +1,31 @@
 # Central reusable workflow for preparing a Power Platform
 # developer workspace.
 #
-# Project repositories call this workflow and provide their own
-# project, developer, solution and environment settings.
+# Project repositories call this workflow using a small caller file.
 #
 # Behaviour:
 #
 # Environment does not exist
 #   -> Create the environment
-#   -> Assign the automation application
+#   -> Assign the automation application user
 #   -> Assign the developer
 #   -> Pack and import the project solution
 #
 # Environment already exists
-#   -> Reuse the environment
+#   -> Reuse the existing environment
 #   -> Confirm the user assignments
 #   -> Pack and import the latest project solution again
 #
-# This workflow does not delete environments.
+# This workflow does not delete or reset environments.
 
 name: Reusable - Prepare Power Platform Developer Workspace
 
 on:
   workflow_call:
     inputs:
-      # ------------------------------------------------------------
-      # Project and developer settings
-      # ------------------------------------------------------------
+      # ============================================================
+      # Required project settings
+      # ============================================================
 
       project_key:
         description: Short project identifier, for example LUG-CHESS
@@ -43,10 +42,6 @@ on:
         required: true
         type: string
 
-      # ------------------------------------------------------------
-      # Solution settings
-      # ------------------------------------------------------------
-
       solution_name:
         description: Power Platform solution unique name
         required: true
@@ -57,8 +52,12 @@ on:
         required: true
         type: string
 
+      # ============================================================
+      # Optional solution settings
+      # ============================================================
+
       source_ref:
-        description: Trusted Git branch or tag containing the solution source
+        description: Git branch or tag containing the solution source
         required: false
         default: main
         type: string
@@ -75,12 +74,12 @@ on:
         default: ""
         type: string
 
-      # ------------------------------------------------------------
-      # Environment settings
-      # ------------------------------------------------------------
+      # ============================================================
+      # Optional environment settings
+      # ============================================================
 
       environment_type:
-        description: Developer, Sandbox, Production, Trial, Teams or SubscriptionBasedTrial
+        description: Power Platform environment type
         required: false
         default: Developer
         type: string
@@ -92,7 +91,7 @@ on:
         type: string
 
       environment_domain:
-        description: Optional environment domain. Generated when blank.
+        description: Optional Dataverse domain. Generated when blank.
         required: false
         default: ""
         type: string
@@ -104,21 +103,9 @@ on:
         type: string
 
       environment_language:
-        description: Language used when creating Dataverse
+        description: Default language used when creating the environment
         required: false
         default: English
-        type: string
-
-      environment_templates:
-        description: Optional comma-separated Dynamics 365 app templates
-        required: false
-        default: ""
-        type: string
-
-      security_group_id:
-        description: Optional Entra security group ID. Required for Teams environments.
-        required: false
-        default: ""
         type: string
 
       region:
@@ -128,42 +115,30 @@ on:
         type: string
 
       currency:
-        description: Dataverse currency code
+        description: Default Dataverse currency code
         required: false
         default: GBP
         type: string
 
-      # ------------------------------------------------------------
-      # User and application access
-      # ------------------------------------------------------------
-
-      assign_developer:
-        description: Assign the developer to the prepared environment
-        required: false
-        default: true
-        type: boolean
+      # ============================================================
+      # Access settings
+      # ============================================================
 
       developer_role:
-        description: Dataverse security role assigned to the developer
+        description: Dataverse role assigned to the developer
         required: false
         default: System Administrator
         type: string
-
-      assign_automation_user:
-        description: Add the automation application as a Dataverse application user
-        required: false
-        default: true
-        type: boolean
 
       automation_role:
-        description: Dataverse security role assigned to the automation application
+        description: Dataverse role assigned to the automation application
         required: false
         default: System Administrator
         type: string
 
-      # ------------------------------------------------------------
-      # Solution import behaviour
-      # ------------------------------------------------------------
+      # ============================================================
+      # Solution import settings
+      # ============================================================
 
       force_overwrite:
         description: Overwrite unmanaged customisations during import
@@ -172,47 +147,23 @@ on:
         type: boolean
 
       publish_changes:
-        description: Publish changes after a successful solution import
+        description: Publish changes after a successful import
         required: false
         default: true
         type: boolean
 
       asynchronous_import:
-        description: Run the solution import asynchronously
+        description: Import the solution asynchronously
         required: false
         default: false
         type: boolean
 
-      activate_plugins:
-        description: Activate plug-ins and workflows during import
-        required: false
-        default: false
-        type: boolean
-
-      skip_dependency_check:
-        description: Skip dependencies marked as product updates
-        required: false
-        default: false
-        type: boolean
-
-      skip_lower_version:
-        description: Skip import when the same or a higher version already exists
-        required: false
-        default: false
-        type: boolean
-
-      pack_error_level:
-        description: Solution pack log level
-        required: false
-        default: Verbose
-        type: string
-
-      # ------------------------------------------------------------
+      # ============================================================
       # Retry and diagnostic settings
-      # ------------------------------------------------------------
+      # ============================================================
 
       max_async_wait_minutes:
-        description: Maximum PAC CLI wait time for long-running operations
+        description: Maximum PAC CLI wait time in minutes
         required: false
         default: 60
         type: number
@@ -230,30 +181,24 @@ on:
         type: number
 
       upload_solution_artifact:
-        description: Upload the generated solution ZIP to the workflow run
+        description: Upload the generated ZIP and pack log
         required: false
         default: true
         type: boolean
 
-      artifact_name:
-        description: Optional name for the generated solution artifact
-        required: false
-        default: ""
-        type: string
-
       artifact_retention_days:
-        description: Number of days to retain the generated solution ZIP
+        description: Number of days to retain the generated artifact
         required: false
         default: 7
         type: number
 
       next_step_message:
-        description: Project-specific instruction displayed after deployment
+        description: Project-specific instruction shown after deployment
         required: false
         default: Validate the solution before beginning development.
         type: string
 
-    # The caller repository supplies these values as GitHub secrets.
+    # These secrets are passed by the project caller workflow.
     secrets:
       pp_tenant_id:
         description: Microsoft Entra tenant ID
@@ -270,15 +215,15 @@ on:
     # Values returned to the caller workflow.
     outputs:
       environment_id:
-        description: ID of the prepared environment
+        description: ID of the prepared Power Platform environment
         value: ${{ jobs.prepare-workspace.outputs.environment_id }}
 
       environment_name:
-        description: Name of the prepared environment
+        description: Name of the prepared Power Platform environment
         value: ${{ jobs.prepare-workspace.outputs.environment_name }}
 
       environment_url:
-        description: URL of the prepared environment
+        description: URL of the prepared Power Platform environment
         value: ${{ jobs.prepare-workspace.outputs.environment_url }}
 
       solution_artifact_name:
@@ -293,65 +238,56 @@ jobs:
     name: Prepare Power Platform developer workspace
 
     runs-on: windows-latest
-
     timeout-minutes: 120
+
+    # Prevent two runs from modifying the same developer environment
+    # at the same time.
+    concurrency:
+      group: >-
+        power-platform-${{ github.repository }}-${{
+        inputs.project_key }}-${{ inputs.developer_alias }}
+      cancel-in-progress: false
 
     outputs:
       environment_id: ${{ steps.environment_details.outputs.environment_id }}
-
       environment_name: ${{ steps.workspace_names.outputs.environment_name }}
-
       environment_url: ${{ steps.environment_details.outputs.environment_url }}
-
       solution_artifact_name: ${{ steps.pack_solution.outputs.artifact_name }}
 
     steps:
-      # ------------------------------------------------------------
-      # Check out the project repository
-      # ------------------------------------------------------------
+      # ============================================================
+      # 1. Check out the calling project repository
+      # ============================================================
 
-      # The repository calling this reusable workflow is checked out.
-      #
-      # For the Chess project, this provides:
-      # power-platform/ChessPlayingAgent/src
-      - name: Check out trusted project source
+      # In a reusable workflow, github.repository refers to the
+      # repository containing the caller workflow.
+      - name: Check out project source
         uses: actions/checkout@v4
         with:
+          repository: ${{ github.repository }}
           ref: ${{ inputs.source_ref }}
 
-      # Install PAC CLI and add the pac command to PATH.
+      # Install PAC CLI and make pac available to later steps.
       - name: Install Power Platform tools
         uses: microsoft/powerplatform-actions/actions-install@v1
         with:
-          add-tools-to-path: true
+          add-tools-to-path: "true"
 
-      # ------------------------------------------------------------
-      # Validate the configuration
-      # ------------------------------------------------------------
+      # ============================================================
+      # 2. Validate the project settings
+      # ============================================================
 
-      - name: Validate inputs and solution source
+      - name: Validate configuration and solution source
         shell: pwsh
         env:
           ENVIRONMENT_TYPE: ${{ inputs.environment_type }}
-
-          SECURITY_GROUP_ID: ${{ inputs.security_group_id }}
-
           SOLUTION_NAME: ${{ inputs.solution_name }}
-
           SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
-
           SOLUTION_PACKAGE_TYPE: ${{ inputs.solution_package_type }}
-
-          PACK_ERROR_LEVEL: ${{ inputs.pack_error_level }}
-
           MAX_ASYNC_WAIT_MINUTES: ${{ inputs.max_async_wait_minutes }}
-
           LOOKUP_ATTEMPTS: ${{ inputs.environment_lookup_attempts }}
-
           LOOKUP_DELAY_SECONDS: ${{ inputs.environment_lookup_delay_seconds }}
-
           ARTIFACT_RETENTION_DAYS: ${{ inputs.artifact_retention_days }}
-
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -368,17 +304,11 @@ jobs:
             $allowedEnvironmentTypes -notcontains
             $env:ENVIRONMENT_TYPE
           ) {
-            throw "Unsupported environment type: $env:ENVIRONMENT_TYPE"
-          }
+            throw @"
+          Unsupported environment type:
 
-          # Teams environments require an Entra security group.
-          if (
-            $env:ENVIRONMENT_TYPE -eq "Teams" -and
-            [string]::IsNullOrWhiteSpace(
-              $env:SECURITY_GROUP_ID
-            )
-          ) {
-            throw "security_group_id is required for a Teams environment."
+          $env:ENVIRONMENT_TYPE
+          "@
           }
 
           $allowedPackageTypes = @(
@@ -397,21 +327,6 @@ jobs:
 
           Supported values are Unmanaged and Managed.
           "@
-          }
-
-          $allowedPackErrorLevels = @(
-            "Verbose",
-            "Info",
-            "Warning",
-            "Error",
-            "Off"
-          )
-
-          if (
-            $allowedPackErrorLevels -notcontains
-            $env:PACK_ERROR_LEVEL
-          ) {
-            throw "Unsupported pack error level: $env:PACK_ERROR_LEVEL"
           }
 
           if (
@@ -470,45 +385,35 @@ jobs:
 
           if ($null -eq $pacCommand) {
             throw @"
-          Power Platform CLI was installed, but the pac command
-          was not added to PATH.
+          Power Platform CLI was installed, but pac was not
+          added to PATH.
           "@
           }
 
           Write-Host "PAC CLI location:"
           Write-Host $pacCommand.Source
 
-          # Running pac without --version confirms that it starts.
-          pac
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "Power Platform CLI could not be started."
-          }
-
           Write-Host ""
-          Write-Host "Solution configuration:"
+          Write-Host "Project configuration:"
+          Write-Host "Repository: ${{ github.repository }}"
           Write-Host "Solution: $env:SOLUTION_NAME"
           Write-Host "Source folder: $env:SOLUTION_SOURCE_FOLDER"
           Write-Host "Package type: $env:SOLUTION_PACKAGE_TYPE"
+          Write-Host "Environment type: $env:ENVIRONMENT_TYPE"
 
-      # ------------------------------------------------------------
-      # Generate the environment name and domain
-      # ------------------------------------------------------------
+      # ============================================================
+      # 3. Generate the environment name and domain
+      # ============================================================
 
-      - name: Generate workspace names
+      - name: Generate environment name and domain
         id: workspace_names
         shell: pwsh
         env:
           PROJECT_KEY: ${{ inputs.project_key }}
-
           DEVELOPER_ALIAS: ${{ inputs.developer_alias }}
-
           REQUESTED_ENVIRONMENT_NAME: ${{ inputs.environment_name }}
-
           REQUESTED_ENVIRONMENT_DOMAIN: ${{ inputs.environment_domain }}
-
           ENVIRONMENT_SUFFIX: ${{ inputs.environment_suffix }}
-
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -519,12 +424,8 @@ jobs:
             )
 
             $safeValue = $Value.ToUpperInvariant()
-
-            $safeValue = $safeValue `
-              -replace '[^A-Z0-9-]', '-'
-
-            $safeValue = $safeValue `
-              -replace '-+', '-'
+            $safeValue = $safeValue -replace '[^A-Z0-9-]', '-'
+            $safeValue = $safeValue -replace '-+', '-'
 
             return $safeValue.Trim('-')
           }
@@ -536,12 +437,8 @@ jobs:
             )
 
             $safeValue = $Value.ToLowerInvariant()
-
-            $safeValue = $safeValue `
-              -replace '[^a-z0-9-]', '-'
-
-            $safeValue = $safeValue `
-              -replace '-+', '-'
+            $safeValue = $safeValue -replace '[^a-z0-9-]', '-'
+            $safeValue = $safeValue -replace '-+', '-'
 
             return $safeValue.Trim('-')
           }
@@ -589,9 +486,12 @@ jobs:
             throw "A valid environment domain could not be generated."
           }
 
-          Write-Host "Environment name: $environmentName"
+          Write-Host "Environment name:"
+          Write-Host $environmentName
 
-          Write-Host "Environment domain: $environmentDomain"
+          Write-Host ""
+          Write-Host "Environment domain:"
+          Write-Host $environmentDomain
 
           "environment_name=$environmentName" |
             Out-File `
@@ -605,19 +505,16 @@ jobs:
               -Encoding utf8 `
               -Append
 
-      # ------------------------------------------------------------
-      # Authenticate for tenant administration
-      # ------------------------------------------------------------
+      # ============================================================
+      # 4. Authenticate for tenant administration
+      # ============================================================
 
       - name: Authenticate for Power Platform administration
         shell: pwsh
         env:
           PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
-
           PP_APP_ID: ${{ secrets.pp_app_id }}
-
           PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
-
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -646,25 +543,48 @@ jobs:
             --tenant "$env:PP_TENANT_ID"
 
           if ($LASTEXITCODE -ne 0) {
-            throw @"
-          Power Platform administration authentication failed.
-          "@
+            throw "Power Platform administration authentication failed."
           }
 
           pac auth who
 
-      # ------------------------------------------------------------
-      # Find the existing environment
-      # ------------------------------------------------------------
+      # ============================================================
+      # 5. Find an existing environment
+      # ============================================================
 
-      - name: Find the existing environment
+      - name: Find existing environment
         id: find_environment
         shell: pwsh
         env:
           ENVIRONMENT_NAME: ${{ steps.workspace_names.outputs.environment_name }}
-
         run: |
           $ErrorActionPreference = "Stop"
+
+          function Get-PropertyValue {
+            param(
+              [object]$Object,
+              [string[]]$Names
+            )
+
+            if ($null -eq $Object) {
+              return $null
+            }
+
+            foreach ($name in $Names) {
+              $property = $Object.PSObject.Properties[$name]
+
+              if (
+                $null -ne $property -and
+                -not [string]::IsNullOrWhiteSpace(
+                  [string]$property.Value
+                )
+              ) {
+                return [string]$property.Value
+              }
+            }
+
+            return $null
+          }
 
           $rawOutput = & pac admin list `
             --name "$env:ENVIRONMENT_NAME" `
@@ -695,48 +615,14 @@ jobs:
           catch {
             Write-Host $jsonText
 
-            throw "The environment list was not valid JSON."
+            throw "The environment list response was not valid JSON."
           }
 
-          $environments = @()
-
-          if ($null -ne $parsedResult) {
-            $valueProperty = `
-              $parsedResult.PSObject.Properties["value"]
-
-            if ($null -ne $valueProperty) {
-              $environments = @($parsedResult.value)
-            }
-            else {
-              $environments = @($parsedResult)
-            }
+          if ($null -ne $parsedResult.value) {
+            $environments = @($parsedResult.value)
           }
-
-          function Get-PropertyValue {
-            param(
-              [object]$Object,
-              [string[]]$Names
-            )
-
-            if ($null -eq $Object) {
-              return $null
-            }
-
-            foreach ($name in $Names) {
-              $property = `
-                $Object.PSObject.Properties[$name]
-
-              if (
-                $null -ne $property -and
-                -not [string]::IsNullOrWhiteSpace(
-                  [string]$property.Value
-                )
-              ) {
-                return [string]$property.Value
-              }
-            }
-
-            return $null
+          else {
+            $environments = @($parsedResult)
           }
 
           $matchingEnvironment = $null
@@ -753,7 +639,6 @@ jobs:
 
             if ($name -eq $env:ENVIRONMENT_NAME) {
               $matchingEnvironment = $environment
-
               break
             }
           }
@@ -787,9 +672,7 @@ jobs:
             )
 
           Write-Host "Existing environment found."
-
           Write-Host "Environment ID: $environmentId"
-
           Write-Host "Environment URL: $environmentUrl"
 
           "exists=true" |
@@ -810,35 +693,22 @@ jobs:
               -Encoding utf8 `
               -Append
 
-      # ------------------------------------------------------------
-      # Create the environment only when it does not exist
-      # ------------------------------------------------------------
+      # ============================================================
+      # 6. Create the environment only when it is missing
+      # ============================================================
 
-      # There is no delete or recreate step.
-      #
-      # The developer is assigned separately after creation.
-      - name: Create the environment when required
+      # There is deliberately no delete or recreate step.
+      - name: Create environment when required
         if: steps.find_environment.outputs.exists == 'false'
         shell: pwsh
         env:
           ENVIRONMENT_NAME: ${{ steps.workspace_names.outputs.environment_name }}
-
           ENVIRONMENT_DOMAIN: ${{ steps.workspace_names.outputs.environment_domain }}
-
           ENVIRONMENT_TYPE: ${{ inputs.environment_type }}
-
-          ENVIRONMENT_LANGUAGE: ${{ inputs.environment_language }}
-
-          ENVIRONMENT_TEMPLATES: ${{ inputs.environment_templates }}
-
-          SECURITY_GROUP_ID: ${{ inputs.security_group_id }}
-
           REGION: ${{ inputs.region }}
-
           CURRENCY: ${{ inputs.currency }}
-
+          ENVIRONMENT_LANGUAGE: ${{ inputs.environment_language }}
           MAX_ASYNC_WAIT_MINUTES: ${{ inputs.max_async_wait_minutes }}
-
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -859,69 +729,30 @@ jobs:
             $env:CURRENCY,
             "--domain",
             $env:ENVIRONMENT_DOMAIN,
+            "--language",
+            $env:ENVIRONMENT_LANGUAGE,
             "--max-async-wait-time",
             $env:MAX_ASYNC_WAIT_MINUTES,
             "--json"
           )
 
-          if (
-            -not [string]::IsNullOrWhiteSpace(
-              $env:ENVIRONMENT_LANGUAGE
-            )
-          ) {
-            $arguments += @(
-              "--language",
-              $env:ENVIRONMENT_LANGUAGE
-            )
-          }
-
-          if (
-            -not [string]::IsNullOrWhiteSpace(
-              $env:ENVIRONMENT_TEMPLATES
-            )
-          ) {
-            $arguments += @(
-              "--templates",
-              $env:ENVIRONMENT_TEMPLATES
-            )
-          }
-
-          if (
-            -not [string]::IsNullOrWhiteSpace(
-              $env:SECURITY_GROUP_ID
-            )
-          ) {
-            $arguments += @(
-              "--security-group-id",
-              $env:SECURITY_GROUP_ID
-            )
-          }
-
           & pac @arguments
 
           if ($LASTEXITCODE -ne 0) {
-            throw @"
-          The Power Platform environment could not be created.
-          "@
+            throw "The Power Platform environment could not be created."
           }
 
-      # ------------------------------------------------------------
-      # Retrieve the prepared environment ID and URL
-      # ------------------------------------------------------------
+      # ============================================================
+      # 7. Retrieve the prepared environment details
+      # ============================================================
 
-      # A new environment can take time to expose its ID and URL.
-      #
-      # This step also works when the environment already existed.
       - name: Retrieve prepared environment details
         id: environment_details
         shell: pwsh
         env:
           ENVIRONMENT_NAME: ${{ steps.workspace_names.outputs.environment_name }}
-
           LOOKUP_ATTEMPTS: ${{ inputs.environment_lookup_attempts }}
-
           LOOKUP_DELAY_SECONDS: ${{ inputs.environment_lookup_delay_seconds }}
-
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -936,8 +767,7 @@ jobs:
             }
 
             foreach ($name in $Names) {
-              $property = `
-                $Object.PSObject.Properties[$name]
+              $property = $Object.PSObject.Properties[$name]
 
               if (
                 $null -ne $property -and
@@ -952,14 +782,10 @@ jobs:
             return $null
           }
 
-          $maximumAttempts = `
-            [int]$env:LOOKUP_ATTEMPTS
-
-          $delaySeconds = `
-            [int]$env:LOOKUP_DELAY_SECONDS
+          $maximumAttempts = [int]$env:LOOKUP_ATTEMPTS
+          $delaySeconds = [int]$env:LOOKUP_DELAY_SECONDS
 
           $environmentId = $null
-
           $environmentUrl = $null
 
           for (
@@ -975,18 +801,12 @@ jobs:
               --json
 
             if ($LASTEXITCODE -ne 0) {
-              throw @"
-            Unable to retrieve Power Platform environments.
-            "@
+              throw "Unable to retrieve Power Platform environments."
             }
 
             $jsonText = $rawOutput -join "`n"
 
-            if (
-              -not [string]::IsNullOrWhiteSpace(
-                $jsonText
-              )
-            ) {
+            if (-not [string]::IsNullOrWhiteSpace($jsonText)) {
               try {
                 $parsedResult = $jsonText |
                   ConvertFrom-Json
@@ -994,21 +814,14 @@ jobs:
               catch {
                 Write-Host $jsonText
 
-                throw "The environment list was not valid JSON."
+                throw "The environment list response was not valid JSON."
               }
 
-              $environments = @()
-
-              if ($null -ne $parsedResult) {
-                $valueProperty = `
-                  $parsedResult.PSObject.Properties["value"]
-
-                if ($null -ne $valueProperty) {
-                  $environments = @($parsedResult.value)
-                }
-                else {
-                  $environments = @($parsedResult)
-                }
+              if ($null -ne $parsedResult.value) {
+                $environments = @($parsedResult.value)
+              }
+              else {
+                $environments = @($parsedResult)
               }
 
               foreach ($environment in $environments) {
@@ -1057,26 +870,24 @@ jobs:
             }
 
             if ($attempt -lt $maximumAttempts) {
-              Start-Sleep `
-                -Seconds $delaySeconds
+              Start-Sleep -Seconds $delaySeconds
             }
           }
 
           if ([string]::IsNullOrWhiteSpace($environmentId)) {
-            throw @"
-          The prepared environment ID could not be identified.
-          "@
+            throw "The prepared environment ID could not be identified."
           }
 
           if ([string]::IsNullOrWhiteSpace($environmentUrl)) {
-            throw @"
-          The prepared environment URL could not be identified.
-          "@
+            throw "The prepared environment URL could not be identified."
           }
 
-          Write-Host "Environment ID: $environmentId"
+          Write-Host "Environment ID:"
+          Write-Host $environmentId
 
-          Write-Host "Environment URL: $environmentUrl"
+          Write-Host ""
+          Write-Host "Environment URL:"
+          Write-Host $environmentUrl
 
           "environment_id=$environmentId" |
             Out-File `
@@ -1090,77 +901,80 @@ jobs:
               -Encoding utf8 `
               -Append
 
-      # ------------------------------------------------------------
-      # Assign access
-      # ------------------------------------------------------------
+      # ============================================================
+      # 8. Assign the automation application user
+      # ============================================================
 
-      # Add or confirm the service principal as an application user.
-      - name: Assign the automation application user
-        if: inputs.assign_automation_user
+      - name: Assign automation application user
         shell: pwsh
         env:
           PP_APP_ID: ${{ secrets.pp_app_id }}
-
           AUTOMATION_ROLE: ${{ inputs.automation_role }}
-
           ENVIRONMENT_ID: ${{ steps.environment_details.outputs.environment_id }}
-
         run: |
           $ErrorActionPreference = "Stop"
 
-          pac admin assign-user `
-            --environment "$env:ENVIRONMENT_ID" `
-            --user "$env:PP_APP_ID" `
-            --role "$env:AUTOMATION_ROLE" `
-            --application-user
+          $arguments = @(
+            "--log-to-console",
+            "admin",
+            "assign-user",
+            "--environment",
+            $env:ENVIRONMENT_ID,
+            "--user",
+            $env:PP_APP_ID,
+            "--role",
+            $env:AUTOMATION_ROLE,
+            "--application-user"
+          )
+
+          & pac @arguments
 
           if ($LASTEXITCODE -ne 0) {
-            throw @"
-          The automation application user could not be assigned.
-          "@
+            throw "The automation application user could not be assigned."
           }
 
-      # Add or confirm the human developer and security role.
-      - name: Assign the developer
-        if: inputs.assign_developer
+      # ============================================================
+      # 9. Assign the developer
+      # ============================================================
+
+      - name: Assign developer
         shell: pwsh
         env:
           DEVELOPER_UPN: ${{ inputs.developer_upn }}
-
           DEVELOPER_ROLE: ${{ inputs.developer_role }}
-
           ENVIRONMENT_ID: ${{ steps.environment_details.outputs.environment_id }}
-
         run: |
           $ErrorActionPreference = "Stop"
 
-          pac admin assign-user `
-            --environment "$env:ENVIRONMENT_ID" `
-            --user "$env:DEVELOPER_UPN" `
-            --role "$env:DEVELOPER_ROLE"
+          $arguments = @(
+            "--log-to-console",
+            "admin",
+            "assign-user",
+            "--environment",
+            $env:ENVIRONMENT_ID,
+            "--user",
+            $env:DEVELOPER_UPN,
+            "--role",
+            $env:DEVELOPER_ROLE
+          )
+
+          & pac @arguments
 
           if ($LASTEXITCODE -ne 0) {
             throw "The developer could not be assigned."
           }
 
-      # ------------------------------------------------------------
-      # Pack the solution from source control
-      # ------------------------------------------------------------
+      # ============================================================
+      # 10. Pack the solution from the project repository
+      # ============================================================
 
-      - name: Pack the project solution
+      - name: Pack project solution
         id: pack_solution
         shell: pwsh
         env:
           SOLUTION_NAME: ${{ inputs.solution_name }}
-
           SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
-
           SOLUTION_PACKAGE_TYPE: ${{ inputs.solution_package_type }}
-
-          PACK_ERROR_LEVEL: ${{ inputs.pack_error_level }}
-
-          REQUESTED_ARTIFACT_NAME: ${{ inputs.artifact_name }}
-
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -1182,7 +996,7 @@ jobs:
             $outputFolder `
             "$($env:SOLUTION_NAME)-pack.log"
 
-          $packArguments = @(
+          $arguments = @(
             "--log-to-console",
             "solution",
             "pack",
@@ -1193,24 +1007,15 @@ jobs:
             "--packagetype",
             $env:SOLUTION_PACKAGE_TYPE,
             "--errorlevel",
-            $env:PACK_ERROR_LEVEL,
+            "Verbose",
             "--log",
             $packLog
           )
 
-          Write-Host "Packing solution source:"
-          Write-Host $env:SOLUTION_SOURCE_FOLDER
-
-          Write-Host ""
-          Write-Host "Solution package:"
-          Write-Host $solutionZip
-
-          & pac @packArguments
+          & pac @arguments
 
           if ($LASTEXITCODE -ne 0) {
-            throw @"
-          The Power Platform solution could not be packed.
-          "@
+            throw "The Power Platform solution could not be packed."
           }
 
           if (
@@ -1220,28 +1025,11 @@ jobs:
                 -PathType Leaf
             )
           ) {
-            throw "The solution package was not created."
+            throw "The solution ZIP was not created."
           }
 
-          $solutionFile = Get-Item `
-            -LiteralPath $solutionZip
-
-          Write-Host ""
-          Write-Host "Packed solution size:"
-          Write-Host "$($solutionFile.Length) bytes"
-
-          if (
-            [string]::IsNullOrWhiteSpace(
-              $env:REQUESTED_ARTIFACT_NAME
-            )
-          ) {
-            $artifactName = `
-              "$($env:SOLUTION_NAME)-$($env:SOLUTION_PACKAGE_TYPE)"
-          }
-          else {
-            $artifactName = `
-              $env:REQUESTED_ARTIFACT_NAME.Trim()
-          }
+          $artifactName = `
+            "$($env:SOLUTION_NAME)-$($env:SOLUTION_PACKAGE_TYPE)"
 
           "SOLUTION_ZIP=$solutionZip" |
             Out-File `
@@ -1255,42 +1043,47 @@ jobs:
               -Encoding utf8 `
               -Append
 
+          "pack_log=$packLog" |
+            Out-File `
+              -FilePath $env:GITHUB_OUTPUT `
+              -Encoding utf8 `
+              -Append
+
           "artifact_name=$artifactName" |
             Out-File `
               -FilePath $env:GITHUB_OUTPUT `
               -Encoding utf8 `
               -Append
 
-      # Keep the exact ZIP that the workflow attempted to import.
-      #
-      # This is useful for manual import testing and troubleshooting.
-      - name: Upload packed solution artifact
+      # ============================================================
+      # 11. Upload the generated ZIP and pack log
+      # ============================================================
+
+      - name: Upload solution artifact
         if: inputs.upload_solution_artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.pack_solution.outputs.artifact_name }}
 
-          path: ${{ steps.pack_solution.outputs.solution_zip }}
+          path: |
+            ${{ steps.pack_solution.outputs.solution_zip }}
+            ${{ steps.pack_solution.outputs.pack_log }}
 
           if-no-files-found: error
 
           retention-days: ${{ inputs.artifact_retention_days }}
 
-      # ------------------------------------------------------------
-      # Authenticate directly to the target environment
-      # ------------------------------------------------------------
+      # ============================================================
+      # 12. Authenticate directly to the target environment
+      # ============================================================
 
-      - name: Authenticate to the target environment
+      - name: Authenticate to target environment
         shell: pwsh
         env:
           PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
-
           PP_APP_ID: ${{ secrets.pp_app_id }}
-
           PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
-
           ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
-
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -1302,47 +1095,28 @@ jobs:
             --environment "$env:ENVIRONMENT_URL"
 
           if ($LASTEXITCODE -ne 0) {
-            throw @"
-          Authentication to the target environment failed.
-          "@
+            throw "Authentication to the target environment failed."
           }
 
           pac auth who
 
-      # ------------------------------------------------------------
-      # Import the latest solution
-      # ------------------------------------------------------------
+      # ============================================================
+      # 13. Import the latest solution
+      # ============================================================
 
-      # This runs for both new and existing environments.
-      #
-      # An existing environment therefore receives the latest solution
-      # package every time the workflow runs.
-      - name: Import the project solution
+      # This runs whether the environment was created or reused.
+      - name: Import project solution
         shell: pwsh
         env:
           ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
-
           DEPLOYMENT_SETTINGS_FILE: ${{ inputs.deployment_settings_file }}
-
           FORCE_OVERWRITE: ${{ inputs.force_overwrite }}
-
           PUBLISH_CHANGES: ${{ inputs.publish_changes }}
-
           ASYNCHRONOUS_IMPORT: ${{ inputs.asynchronous_import }}
-
-          ACTIVATE_PLUGINS: ${{ inputs.activate_plugins }}
-
-          SKIP_DEPENDENCY_CHECK: ${{ inputs.skip_dependency_check }}
-
-          SKIP_LOWER_VERSION: ${{ inputs.skip_lower_version }}
-
           MAX_ASYNC_WAIT_MINUTES: ${{ inputs.max_async_wait_minutes }}
-
         run: |
           $ErrorActionPreference = "Stop"
 
-          # --log-to-console is a global PAC CLI option.
-          # It must appear before "solution import".
           $arguments = @(
             "--log-to-console",
             "solution",
@@ -1365,18 +1139,6 @@ jobs:
 
           if ($env:ASYNCHRONOUS_IMPORT -eq "true") {
             $arguments += "--async"
-          }
-
-          if ($env:ACTIVATE_PLUGINS -eq "true") {
-            $arguments += "--activate-plugins"
-          }
-
-          if ($env:SKIP_DEPENDENCY_CHECK -eq "true") {
-            $arguments += "--skip-dependency-check"
-          }
-
-          if ($env:SKIP_LOWER_VERSION -eq "true") {
-            $arguments += "--skip-lower-version"
           }
 
           if (
@@ -1418,53 +1180,39 @@ jobs:
           The Power Platform solution could not be imported.
 
           Review:
-          1. The PAC CLI diagnostic output above.
-          2. The target environment Solution History.
+          1. The PAC CLI output above.
+          2. Solution History in the target environment.
           3. The generated solution ZIP in the workflow artifacts.
           "@
           }
 
-      # ------------------------------------------------------------
-      # Create the workflow summary
-      # ------------------------------------------------------------
+      # ============================================================
+      # 14. Create the GitHub Actions summary
+      # ============================================================
 
       - name: Create workspace summary
         shell: pwsh
         env:
-          ENVIRONMENT_EXISTED: ${{ steps.find_environment.outputs.exists }}
-
-          ENVIRONMENT_NAME: ${{ steps.workspace_names.outputs.environment_name }}
-
-          ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
-
-          ARTIFACT_NAME: ${{ steps.pack_solution.outputs.artifact_name }}
-
-          ARTIFACT_UPLOADED: ${{ inputs.upload_solution_artifact }}
-
           PROJECT_KEY: ${{ inputs.project_key }}
-
           DEVELOPER_UPN: ${{ inputs.developer_upn }}
-
+          ENVIRONMENT_EXISTED: ${{ steps.find_environment.outputs.exists }}
+          ENVIRONMENT_NAME: ${{ steps.workspace_names.outputs.environment_name }}
+          ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
           ENVIRONMENT_TYPE: ${{ inputs.environment_type }}
-
           SOLUTION_NAME: ${{ inputs.solution_name }}
-
-          SOURCE_REF: ${{ inputs.source_ref }}
-
           SOLUTION_PACKAGE_TYPE: ${{ inputs.solution_package_type }}
-
+          SOURCE_REF: ${{ inputs.source_ref }}
+          ARTIFACT_NAME: ${{ steps.pack_solution.outputs.artifact_name }}
+          ARTIFACT_UPLOADED: ${{ inputs.upload_solution_artifact }}
           NEXT_STEP_MESSAGE: ${{ inputs.next_step_message }}
-
         run: |
           $ErrorActionPreference = "Stop"
 
           if ($env:ENVIRONMENT_EXISTED -eq "true") {
-            $environmentAction = `
-              "Reused existing environment"
+            $environmentAction = "Reused existing environment"
           }
           else {
-            $environmentAction = `
-              "Created new environment"
+            $environmentAction = "Created new environment"
           }
 
           if ($env:ARTIFACT_UPLOADED -eq "true") {
