@@ -1,0 +1,1062 @@
+name: Reusable - Start Power Platform Feature Workspace
+
+on:
+  workflow_call:
+    inputs:
+      project_key:
+        description: Short project identifier used for naming
+        required: true
+        type: string
+      branch_ref:
+        description: Feature branch to update and deploy
+        required: true
+        type: string
+      base_branch:
+        description: Main integration branch
+        required: false
+        default: main
+        type: string
+      developer_alias:
+        description: Short developer identifier
+        required: true
+        type: string
+      developer_upn:
+        description: Developer Microsoft 365 UPN or Entra object ID
+        required: true
+        type: string
+
+      source_environment:
+        description: Dataverse source environment URL or ID
+        required: true
+        type: string
+      source_solution_name:
+        description: Solution unique name in the source environment
+        required: true
+        type: string
+      source_export_managed:
+        description: Export the source solution as managed
+        required: false
+        default: false
+        type: boolean
+      source_export_async:
+        description: Export the source solution asynchronously
+        required: false
+        default: true
+        type: boolean
+      source_export_include:
+        description: Optional comma-separated export settings
+        required: false
+        default: ""
+        type: string
+
+      solution_name:
+        description: Canonical solution unique name used in the repository and target
+        required: true
+        type: string
+      solution_project_folder:
+        description: Repository folder containing the cdsproj and source folder
+        required: true
+        type: string
+      solution_source_folder:
+        description: Repository folder containing unpacked solution source
+        required: true
+        type: string
+      solution_package_type:
+        description: Package type imported into the developer environment
+        required: false
+        default: Unmanaged
+        type: string
+      deployment_settings_file:
+        description: Optional deployment settings JSON path
+        required: false
+        default: ""
+        type: string
+
+      commit_baseline_to_branch:
+        description: Commit source-environment files to the feature branch
+        required: false
+        default: true
+        type: boolean
+      baseline_commit_message:
+        description: Commit message used for the baseline sync
+        required: false
+        default: Sync baseline Power Platform solution
+        type: string
+
+      target_environment_name:
+        description: Exact developer environment name. Generated when blank.
+        required: false
+        default: ""
+        type: string
+      target_environment_domain:
+        description: Dataverse domain. Generated when blank.
+        required: false
+        default: ""
+        type: string
+      target_environment_suffix:
+        description: Suffix used when generating the environment name
+        required: false
+        default: DEV
+        type: string
+      target_environment_mode:
+        description: ReuseOrCreate or CreateOnly
+        required: false
+        default: ReuseOrCreate
+        type: string
+      target_environment_type:
+        description: Developer, Sandbox, Trial, Production, Teams or SubscriptionBasedTrial
+        required: false
+        default: Developer
+        type: string
+      target_environment_region:
+        description: Power Platform region
+        required: false
+        default: europe
+        type: string
+      target_environment_currency:
+        description: Dataverse currency code
+        required: false
+        default: GBP
+        type: string
+      target_environment_language:
+        description: Environment language
+        required: false
+        default: English
+        type: string
+      target_environment_templates:
+        description: Optional comma-separated Dynamics 365 templates
+        required: false
+        default: ""
+        type: string
+      target_environment_security_group_id:
+        description: Optional Entra security group ID
+        required: false
+        default: ""
+        type: string
+      environment_create_async:
+        description: Create the environment asynchronously
+        required: false
+        default: true
+        type: boolean
+
+      assign_automation_user:
+        description: Assign the automation application user
+        required: false
+        default: true
+        type: boolean
+      automation_role:
+        description: Dataverse role for the automation application
+        required: false
+        default: System Administrator
+        type: string
+      assign_developer:
+        description: Assign the human developer
+        required: false
+        default: true
+        type: boolean
+      developer_role:
+        description: Dataverse role for the developer
+        required: false
+        default: System Administrator
+        type: string
+
+      force_overwrite:
+        description: Force overwrite unmanaged customisations
+        required: false
+        default: true
+        type: boolean
+      publish_changes:
+        description: Publish after a successful import
+        required: false
+        default: true
+        type: boolean
+      asynchronous_import:
+        description: Import asynchronously
+        required: false
+        default: false
+        type: boolean
+      activate_plugins:
+        description: Activate plug-ins and workflows during import
+        required: false
+        default: false
+        type: boolean
+      skip_dependency_check:
+        description: Skip product-update dependency checks
+        required: false
+        default: false
+        type: boolean
+      skip_lower_version:
+        description: Skip import when same or higher version exists
+        required: false
+        default: false
+        type: boolean
+
+      max_async_wait_minutes:
+        description: PAC wait time for long-running operations
+        required: false
+        default: 60
+        type: number
+      environment_lookup_attempts:
+        description: Attempts used to retrieve a newly created environment
+        required: false
+        default: 20
+        type: number
+      environment_lookup_delay_seconds:
+        description: Delay between environment lookup attempts
+        required: false
+        default: 30
+        type: number
+      upload_solution_artifact:
+        description: Upload exported and packed solution files
+        required: false
+        default: true
+        type: boolean
+      artifact_retention_days:
+        description: Artifact retention in days
+        required: false
+        default: 7
+        type: number
+      next_step_message:
+        description: Project-specific instruction shown in the summary
+        required: false
+        default: Open the solution and begin the feature work.
+        type: string
+
+    secrets:
+      pp_tenant_id:
+        required: true
+      pp_app_id:
+        required: true
+      pp_client_secret:
+        required: true
+      source_pp_tenant_id:
+        required: false
+      source_pp_app_id:
+        required: false
+      source_pp_client_secret:
+        required: false
+
+    outputs:
+      branch_ref:
+        description: Feature branch prepared by the workflow
+        value: ${{ jobs.start.outputs.branch_ref }}
+      baseline_changes_detected:
+        description: Whether source-environment files changed the branch
+        value: ${{ jobs.start.outputs.baseline_changes_detected }}
+      baseline_commit_sha:
+        description: Baseline commit SHA
+        value: ${{ jobs.start.outputs.baseline_commit_sha }}
+      developer_environment_action:
+        description: Created or Reused
+        value: ${{ jobs.start.outputs.developer_environment_action }}
+      developer_environment_id:
+        description: Developer environment ID
+        value: ${{ jobs.start.outputs.developer_environment_id }}
+      developer_environment_name:
+        description: Developer environment display name
+        value: ${{ jobs.start.outputs.developer_environment_name }}
+      developer_environment_url:
+        description: Developer environment Dataverse URL
+        value: ${{ jobs.start.outputs.developer_environment_url }}
+      maker_environment_url:
+        description: Power Apps maker environment link
+        value: ${{ jobs.start.outputs.maker_environment_url }}
+      solutions_url:
+        description: Power Apps Solutions area link
+        value: ${{ jobs.start.outputs.solutions_url }}
+      solution_id:
+        description: Imported solution ID
+        value: ${{ jobs.start.outputs.solution_id }}
+      solution_url:
+        description: Power Apps solution link
+        value: ${{ jobs.start.outputs.solution_url }}
+      solution_version:
+        description: Imported solution version
+        value: ${{ jobs.start.outputs.solution_version }}
+      solution_artifact_name:
+        description: Artifact containing packages and logs
+        value: ${{ jobs.start.outputs.solution_artifact_name }}
+
+permissions:
+  contents: write
+
+jobs:
+  start:
+    name: Start feature workspace
+    runs-on: windows-latest
+    timeout-minutes: 150
+
+    concurrency:
+      group: power-platform-start-${{ github.repository }}-${{ inputs.developer_alias }}
+      cancel-in-progress: false
+
+    outputs:
+      branch_ref: ${{ inputs.branch_ref }}
+      baseline_changes_detected: ${{ steps.commit_baseline.outputs.changes_detected || steps.no_commit_baseline.outputs.changes_detected }}
+      baseline_commit_sha: ${{ steps.commit_baseline.outputs.commit_sha || steps.no_commit_baseline.outputs.commit_sha }}
+      developer_environment_action: ${{ steps.environment_details.outputs.environment_action }}
+      developer_environment_id: ${{ steps.environment_details.outputs.environment_id }}
+      developer_environment_name: ${{ steps.names.outputs.environment_name }}
+      developer_environment_url: ${{ steps.environment_details.outputs.environment_url }}
+      maker_environment_url: ${{ steps.links.outputs.maker_environment_url }}
+      solutions_url: ${{ steps.links.outputs.solutions_url }}
+      solution_id: ${{ steps.solution_details.outputs.solution_id }}
+      solution_url: ${{ steps.links.outputs.solution_url }}
+      solution_version: ${{ steps.solution_details.outputs.solution_version }}
+      solution_artifact_name: ${{ steps.package.outputs.artifact_name }}
+
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.branch_ref }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Install Power Platform tools
+        uses: microsoft/powerplatform-actions/actions-install@v1
+        with:
+          add-tools-to-path: "true"
+
+      - name: Validate inputs
+        shell: pwsh
+        env:
+          BRANCH_REF: ${{ inputs.branch_ref }}
+          SOURCE_ENVIRONMENT: ${{ inputs.source_environment }}
+          SOURCE_SOLUTION_NAME: ${{ inputs.source_solution_name }}
+          SOLUTION_PROJECT_FOLDER: ${{ inputs.solution_project_folder }}
+          SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
+          SOLUTION_PACKAGE_TYPE: ${{ inputs.solution_package_type }}
+          TARGET_MODE: ${{ inputs.target_environment_mode }}
+          TARGET_TYPE: ${{ inputs.target_environment_type }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if ([string]::IsNullOrWhiteSpace($env:BRANCH_REF)) {
+            throw "branch_ref is required."
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:SOURCE_ENVIRONMENT)) {
+            throw "source_environment is required."
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:SOURCE_SOLUTION_NAME)) {
+            throw "source_solution_name is required."
+          }
+
+          if (-not (Test-Path -LiteralPath $env:SOLUTION_PROJECT_FOLDER -PathType Container)) {
+            throw "solution_project_folder was not found: $env:SOLUTION_PROJECT_FOLDER"
+          }
+
+          $sourceParent = Split-Path -Parent $env:SOLUTION_SOURCE_FOLDER
+          if (-not [string]::IsNullOrWhiteSpace($sourceParent)) {
+            New-Item -ItemType Directory -Path $sourceParent -Force | Out-Null
+          }
+
+          if (@("Unmanaged", "Managed") -notcontains $env:SOLUTION_PACKAGE_TYPE) {
+            throw "solution_package_type must be Unmanaged or Managed."
+          }
+
+          if (@("ReuseOrCreate", "CreateOnly") -notcontains $env:TARGET_MODE) {
+            throw "target_environment_mode must be ReuseOrCreate or CreateOnly."
+          }
+
+          $allowedTypes = @(
+            "Developer",
+            "Sandbox",
+            "Production",
+            "Trial",
+            "Teams",
+            "SubscriptionBasedTrial"
+          )
+          if ($allowedTypes -notcontains $env:TARGET_TYPE) {
+            throw "Unsupported target_environment_type: $env:TARGET_TYPE"
+          }
+
+          if ([int]$env:MAX_WAIT -lt 1) {
+            throw "max_async_wait_minutes must be greater than zero."
+          }
+
+          if ($null -eq (Get-Command pac -ErrorAction SilentlyContinue)) {
+            throw "PAC CLI is not available on PATH."
+          }
+
+      - name: Authenticate to source environment
+        shell: pwsh
+        env:
+          SOURCE_ENVIRONMENT: ${{ inputs.source_environment }}
+          TARGET_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          TARGET_APP_ID: ${{ secrets.pp_app_id }}
+          TARGET_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+          SOURCE_TENANT_ID: ${{ secrets.source_pp_tenant_id }}
+          SOURCE_APP_ID: ${{ secrets.source_pp_app_id }}
+          SOURCE_CLIENT_SECRET: ${{ secrets.source_pp_client_secret }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $tenantId = $env:SOURCE_TENANT_ID
+          $appId = $env:SOURCE_APP_ID
+          $clientSecret = $env:SOURCE_CLIENT_SECRET
+
+          if ([string]::IsNullOrWhiteSpace($tenantId)) {
+            $tenantId = $env:TARGET_TENANT_ID
+          }
+          if ([string]::IsNullOrWhiteSpace($appId)) {
+            $appId = $env:TARGET_APP_ID
+          }
+          if ([string]::IsNullOrWhiteSpace($clientSecret)) {
+            $clientSecret = $env:TARGET_CLIENT_SECRET
+          }
+
+          pac auth create `
+            --name "GitHub-Source-${{ github.run_id }}" `
+            --applicationId "$appId" `
+            --clientSecret "$clientSecret" `
+            --tenant "$tenantId" `
+            --environment "$env:SOURCE_ENVIRONMENT"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Authentication to the source environment failed."
+          }
+
+      - name: Export baseline solution
+        id: export_baseline
+        shell: pwsh
+        env:
+          SOURCE_ENVIRONMENT: ${{ inputs.source_environment }}
+          SOURCE_SOLUTION_NAME: ${{ inputs.source_solution_name }}
+          EXPORT_MANAGED: ${{ inputs.source_export_managed }}
+          EXPORT_ASYNC: ${{ inputs.source_export_async }}
+          EXPORT_INCLUDE: ${{ inputs.source_export_include }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $artifactFolder = Join-Path $env:RUNNER_TEMP "power-platform-feature-start"
+          New-Item -ItemType Directory -Path $artifactFolder -Force | Out-Null
+
+          $sourceZip = Join-Path $artifactFolder "$($env:SOURCE_SOLUTION_NAME)-source.zip"
+
+          $arguments = @(
+            "solution", "export",
+            "--environment", $env:SOURCE_ENVIRONMENT,
+            "--name", $env:SOURCE_SOLUTION_NAME,
+            "--path", $sourceZip,
+            "--overwrite",
+            "--max-async-wait-time", $env:MAX_WAIT
+          )
+
+          if ($env:EXPORT_MANAGED -eq "true") {
+            $arguments += "--managed"
+          }
+          if ($env:EXPORT_ASYNC -eq "true") {
+            $arguments += "--async"
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:EXPORT_INCLUDE)) {
+            $arguments += @("--include", $env:EXPORT_INCLUDE)
+          }
+
+          & pac @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "The baseline solution export failed."
+          }
+
+          if (-not (Test-Path -LiteralPath $sourceZip -PathType Leaf)) {
+            throw "The source solution ZIP was not created."
+          }
+
+          "source_zip=$sourceZip" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "artifact_folder=$artifactFolder" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Unpack baseline into the feature branch
+        shell: pwsh
+        env:
+          SOURCE_ZIP: ${{ steps.export_baseline.outputs.source_zip }}
+          SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
+          EXPORT_MANAGED: ${{ inputs.source_export_managed }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $unpackLog = Join-Path `
+            "${{ steps.export_baseline.outputs.artifact_folder }}" `
+            "baseline-unpack.log"
+
+          $packageType = if ($env:EXPORT_MANAGED -eq "true") {
+            "Managed"
+          }
+          else {
+            "Unmanaged"
+          }
+
+          $arguments = @(
+            "solution", "unpack",
+            "--zipfile", $env:SOURCE_ZIP,
+            "--folder", $env:SOLUTION_SOURCE_FOLDER,
+            "--packagetype", $packageType,
+            "--allowWrite",
+            "--allowDelete",
+            "--clobber",
+            "--errorlevel", "Verbose",
+            "--log", $unpackLog
+          )
+
+          & pac @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "The baseline solution could not be unpacked into the branch."
+          }
+
+      - name: Commit baseline files to the feature branch
+        id: commit_baseline
+        if: inputs.commit_baseline_to_branch
+        shell: pwsh
+        env:
+          BRANCH_REF: ${{ inputs.branch_ref }}
+          SOLUTION_PROJECT_FOLDER: ${{ inputs.solution_project_folder }}
+          COMMIT_MESSAGE: ${{ inputs.baseline_commit_message }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add --all -- "$env:SOLUTION_PROJECT_FOLDER"
+
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            $sha = (git rev-parse HEAD).Trim()
+            "changes_detected=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "commit_sha=$sha" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Write-Host "No baseline source changes were detected."
+            exit 0
+          }
+
+          git commit -m "$env:COMMIT_MESSAGE"
+          if ($LASTEXITCODE -ne 0) {
+            throw "The baseline commit failed."
+          }
+
+          git push origin "HEAD:$env:BRANCH_REF"
+          if ($LASTEXITCODE -ne 0) {
+            throw "The baseline commit could not be pushed to $env:BRANCH_REF."
+          }
+
+          $sha = (git rev-parse HEAD).Trim()
+          "changes_detected=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "commit_sha=$sha" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Record baseline outputs when commit is disabled
+        id: no_commit_baseline
+        if: ${{ !inputs.commit_baseline_to_branch }}
+        shell: pwsh
+        run: |
+          $sha = (git rev-parse HEAD).Trim()
+          "Commit to branch was disabled." | Write-Host
+          "changes_detected=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "commit_sha=$sha" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Generate developer environment name and domain
+        id: names
+        shell: pwsh
+        env:
+          PROJECT_KEY: ${{ inputs.project_key }}
+          DEVELOPER_ALIAS: ${{ inputs.developer_alias }}
+          REQUESTED_NAME: ${{ inputs.target_environment_name }}
+          REQUESTED_DOMAIN: ${{ inputs.target_environment_domain }}
+          SUFFIX: ${{ inputs.target_environment_suffix }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Convert-ToSafeName([string]$Value) {
+            $result = $Value.ToUpperInvariant() -replace '[^A-Z0-9-]', '-'
+            $result = $result -replace '-+', '-'
+            return $result.Trim('-')
+          }
+
+          function Convert-ToSafeDomain([string]$Value) {
+            $result = $Value.ToLowerInvariant() -replace '[^a-z0-9-]', '-'
+            $result = $result -replace '-+', '-'
+            return $result.Trim('-')
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:REQUESTED_NAME)) {
+            $environmentName = "{0}-{1}-{2}" -f `
+              (Convert-ToSafeName $env:PROJECT_KEY), `
+              (Convert-ToSafeName $env:DEVELOPER_ALIAS), `
+              (Convert-ToSafeName $env:SUFFIX)
+          }
+          else {
+            $environmentName = $env:REQUESTED_NAME.Trim()
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:REQUESTED_DOMAIN)) {
+            $environmentDomain = Convert-ToSafeDomain $environmentName
+          }
+          else {
+            $environmentDomain = Convert-ToSafeDomain $env:REQUESTED_DOMAIN
+          }
+
+          if ([string]::IsNullOrWhiteSpace($environmentName)) {
+            throw "A valid developer environment name could not be generated."
+          }
+          if ([string]::IsNullOrWhiteSpace($environmentDomain)) {
+            throw "A valid developer environment domain could not be generated."
+          }
+
+          "environment_name=$environmentName" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_domain=$environmentDomain" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Authenticate for target tenant administration
+        shell: pwsh
+        env:
+          PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          PP_APP_ID: ${{ secrets.pp_app_id }}
+          PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          pac auth create `
+            --name "GitHub-Target-Admin-${{ github.run_id }}" `
+            --applicationId "$env:PP_APP_ID" `
+            --clientSecret "$env:PP_CLIENT_SECRET" `
+            --tenant "$env:PP_TENANT_ID"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Target tenant administration authentication failed."
+          }
+
+      - name: Find existing developer environment
+        id: find_environment
+        shell: pwsh
+        env:
+          ENVIRONMENT_NAME: ${{ steps.names.outputs.environment_name }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Get-Value($Object, [string[]]$Names) {
+            foreach ($name in $Names) {
+              $property = $Object.PSObject.Properties[$name]
+              if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+                return [string]$property.Value
+              }
+            }
+            return ""
+          }
+
+          $raw = & pac admin list --name "$env:ENVIRONMENT_NAME" --json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to list Power Platform environments."
+          }
+
+          $text = $raw -join "`n"
+          $items = @()
+          if (-not [string]::IsNullOrWhiteSpace($text)) {
+            $parsed = $text | ConvertFrom-Json
+            if ($null -ne $parsed.value) {
+              $items = @($parsed.value)
+            }
+            else {
+              $items = @($parsed)
+            }
+          }
+
+          $match = $null
+          foreach ($item in $items) {
+            $name = Get-Value $item @("Environment", "DisplayName", "EnvironmentName", "FriendlyName", "Name")
+            if ($name -ceq $env:ENVIRONMENT_NAME) {
+              $match = $item
+              break
+            }
+          }
+
+          if ($null -eq $match) {
+            "exists=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+
+          "exists=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_id=$(Get-Value $match @('Environment Id','EnvironmentId','Id'))" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_url=$(Get-Value $match @('Environment Url','EnvironmentUrl','Url'))" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_type=$(Get-Value $match @('Type','EnvironmentType'))" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Enforce target environment mode
+        if: steps.find_environment.outputs.exists == 'true' && inputs.target_environment_mode == 'CreateOnly'
+        shell: pwsh
+        env:
+          ENVIRONMENT_NAME: ${{ steps.names.outputs.environment_name }}
+        run: |
+          throw "Environment '$env:ENVIRONMENT_NAME' already exists and target_environment_mode is CreateOnly."
+
+      - name: Create developer environment
+        if: steps.find_environment.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          ENVIRONMENT_NAME: ${{ steps.names.outputs.environment_name }}
+          ENVIRONMENT_DOMAIN: ${{ steps.names.outputs.environment_domain }}
+          ENVIRONMENT_TYPE: ${{ inputs.target_environment_type }}
+          REGION: ${{ inputs.target_environment_region }}
+          CURRENCY: ${{ inputs.target_environment_currency }}
+          LANGUAGE: ${{ inputs.target_environment_language }}
+          TEMPLATES: ${{ inputs.target_environment_templates }}
+          SECURITY_GROUP_ID: ${{ inputs.target_environment_security_group_id }}
+          CREATE_ASYNC: ${{ inputs.environment_create_async }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $arguments = @(
+            "admin", "create",
+            "--name", $env:ENVIRONMENT_NAME,
+            "--type", $env:ENVIRONMENT_TYPE,
+            "--region", $env:REGION,
+            "--currency", $env:CURRENCY,
+            "--language", $env:LANGUAGE,
+            "--domain", $env:ENVIRONMENT_DOMAIN,
+            "--max-async-wait-time", $env:MAX_WAIT,
+            "--json"
+          )
+
+          if (-not [string]::IsNullOrWhiteSpace($env:TEMPLATES)) {
+            $arguments += @("--templates", $env:TEMPLATES)
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:SECURITY_GROUP_ID)) {
+            $arguments += @("--security-group-id", $env:SECURITY_GROUP_ID)
+          }
+          if ($env:CREATE_ASYNC -eq "true") {
+            $arguments += "--async"
+          }
+
+          & pac @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "Developer environment creation failed."
+          }
+
+      - name: Retrieve developer environment details
+        id: environment_details
+        shell: pwsh
+        env:
+          ENVIRONMENT_NAME: ${{ steps.names.outputs.environment_name }}
+          EXISTED: ${{ steps.find_environment.outputs.exists }}
+          LOOKUP_ATTEMPTS: ${{ inputs.environment_lookup_attempts }}
+          LOOKUP_DELAY: ${{ inputs.environment_lookup_delay_seconds }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Get-Value($Object, [string[]]$Names) {
+            foreach ($name in $Names) {
+              $property = $Object.PSObject.Properties[$name]
+              if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+                return [string]$property.Value
+              }
+            }
+            return ""
+          }
+
+          $environmentId = ""
+          $environmentUrl = ""
+          $environmentType = ""
+
+          for ($attempt = 1; $attempt -le [int]$env:LOOKUP_ATTEMPTS; $attempt++) {
+            $raw = & pac admin list --name "$env:ENVIRONMENT_NAME" --json
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to retrieve the developer environment."
+            }
+
+            $text = $raw -join "`n"
+            if (-not [string]::IsNullOrWhiteSpace($text)) {
+              $parsed = $text | ConvertFrom-Json
+              $items = if ($null -ne $parsed.value) { @($parsed.value) } else { @($parsed) }
+
+              foreach ($item in $items) {
+                $name = Get-Value $item @("Environment", "DisplayName", "EnvironmentName", "FriendlyName", "Name")
+                if ($name -ceq $env:ENVIRONMENT_NAME) {
+                  $environmentId = Get-Value $item @("Environment Id", "EnvironmentId", "Id")
+                  $environmentUrl = Get-Value $item @("Environment Url", "EnvironmentUrl", "Url")
+                  $environmentType = Get-Value $item @("Type", "EnvironmentType")
+                  break
+                }
+              }
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($environmentId) -and
+                -not [string]::IsNullOrWhiteSpace($environmentUrl)) {
+              break
+            }
+
+            if ($attempt -lt [int]$env:LOOKUP_ATTEMPTS) {
+              Start-Sleep -Seconds ([int]$env:LOOKUP_DELAY)
+            }
+          }
+
+          if ([string]::IsNullOrWhiteSpace($environmentId) -or
+              [string]::IsNullOrWhiteSpace($environmentUrl)) {
+            throw "The developer environment was not available after the configured wait."
+          }
+
+          $action = if ($env:EXISTED -eq "true") { "Reused" } else { "Created" }
+
+          "environment_action=$action" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_id=$environmentId" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_url=$environmentUrl" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_type=$environmentType" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Assign automation application user
+        if: inputs.assign_automation_user
+        shell: pwsh
+        env:
+          ENVIRONMENT_ID: ${{ steps.environment_details.outputs.environment_id }}
+          APP_ID: ${{ secrets.pp_app_id }}
+          ROLE: ${{ inputs.automation_role }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $output = & pac admin assign-user `
+            --environment "$env:ENVIRONMENT_ID" `
+            --user "$env:APP_ID" `
+            --role "$env:ROLE" `
+            --application-user 2>&1
+
+          $exitCode = $LASTEXITCODE
+          $output | Write-Host
+
+          if ($exitCode -ne 0 -and (($output -join "`n") -notmatch '(?i)already|exists|assigned')) {
+            throw "The automation application user could not be assigned."
+          }
+
+      - name: Assign developer
+        if: inputs.assign_developer
+        shell: pwsh
+        env:
+          ENVIRONMENT_ID: ${{ steps.environment_details.outputs.environment_id }}
+          DEVELOPER_UPN: ${{ inputs.developer_upn }}
+          ROLE: ${{ inputs.developer_role }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $output = & pac admin assign-user `
+            --environment "$env:ENVIRONMENT_ID" `
+            --user "$env:DEVELOPER_UPN" `
+            --role "$env:ROLE" 2>&1
+
+          $exitCode = $LASTEXITCODE
+          $output | Write-Host
+
+          if ($exitCode -ne 0 -and (($output -join "`n") -notmatch '(?i)already|exists|assigned')) {
+            throw "The developer could not be assigned."
+          }
+
+      - name: Pack solution from branch
+        id: package
+        shell: pwsh
+        env:
+          SOLUTION_NAME: ${{ inputs.solution_name }}
+          SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
+          PACKAGE_TYPE: ${{ inputs.solution_package_type }}
+          ARTIFACT_FOLDER: ${{ steps.export_baseline.outputs.artifact_folder }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $solutionZip = Join-Path $env:ARTIFACT_FOLDER "$($env:SOLUTION_NAME)-branch.zip"
+          $packLog = Join-Path $env:ARTIFACT_FOLDER "solution-pack.log"
+
+          & pac solution pack `
+            --zipfile "$solutionZip" `
+            --folder "$env:SOLUTION_SOURCE_FOLDER" `
+            --packagetype "$env:PACKAGE_TYPE" `
+            --errorlevel Verbose `
+            --log "$packLog"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "The branch solution could not be packed."
+          }
+
+          $artifactName = "$($env:SOLUTION_NAME)-feature-start-${{ github.run_number }}"
+
+          "solution_zip=$solutionZip" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "artifact_name=$artifactName" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Authenticate to developer environment
+        shell: pwsh
+        env:
+          PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          PP_APP_ID: ${{ secrets.pp_app_id }}
+          PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+          ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          pac auth create `
+            --name "GitHub-Developer-${{ github.run_id }}" `
+            --applicationId "$env:PP_APP_ID" `
+            --clientSecret "$env:PP_CLIENT_SECRET" `
+            --tenant "$env:PP_TENANT_ID" `
+            --environment "$env:ENVIRONMENT_URL"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Authentication to the developer environment failed."
+          }
+
+      - name: Import solution into developer environment
+        shell: pwsh
+        env:
+          SOLUTION_ZIP: ${{ steps.package.outputs.solution_zip }}
+          ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
+          SETTINGS_FILE: ${{ inputs.deployment_settings_file }}
+          FORCE_OVERWRITE: ${{ inputs.force_overwrite }}
+          PUBLISH_CHANGES: ${{ inputs.publish_changes }}
+          ASYNC_IMPORT: ${{ inputs.asynchronous_import }}
+          ACTIVATE_PLUGINS: ${{ inputs.activate_plugins }}
+          SKIP_DEPENDENCY_CHECK: ${{ inputs.skip_dependency_check }}
+          SKIP_LOWER_VERSION: ${{ inputs.skip_lower_version }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $arguments = @(
+            "solution", "import",
+            "--path", $env:SOLUTION_ZIP,
+            "--environment", $env:ENVIRONMENT_URL,
+            "--max-async-wait-time", $env:MAX_WAIT
+          )
+
+          if ($env:FORCE_OVERWRITE -eq "true") { $arguments += "--force-overwrite" }
+          if ($env:PUBLISH_CHANGES -eq "true") { $arguments += "--publish-changes" }
+          if ($env:ASYNC_IMPORT -eq "true") { $arguments += "--async" }
+          if ($env:ACTIVATE_PLUGINS -eq "true") { $arguments += "--activate-plugins" }
+          if ($env:SKIP_DEPENDENCY_CHECK -eq "true") { $arguments += "--skip-dependency-check" }
+          if ($env:SKIP_LOWER_VERSION -eq "true") { $arguments += "--skip-lower-version" }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:SETTINGS_FILE)) {
+            if (-not (Test-Path -LiteralPath $env:SETTINGS_FILE -PathType Leaf)) {
+              throw "deployment_settings_file was not found: $env:SETTINGS_FILE"
+            }
+            $arguments += @("--settings-file", $env:SETTINGS_FILE)
+          }
+
+          & pac @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "The solution import into the developer environment failed."
+          }
+
+      - name: Retrieve imported solution details
+        id: solution_details
+        shell: pwsh
+        env:
+          ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
+          SOLUTION_NAME: ${{ inputs.solution_name }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Get-Value($Object, [string[]]$Names) {
+            foreach ($name in $Names) {
+              $property = $Object.PSObject.Properties[$name]
+              if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+                return [string]$property.Value
+              }
+            }
+            return ""
+          }
+
+          $raw = & pac solution list --environment "$env:ENVIRONMENT_URL" --json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to list solutions in the developer environment."
+          }
+
+          $parsed = ($raw -join "`n") | ConvertFrom-Json
+          $items = if ($null -ne $parsed.value) { @($parsed.value) } else { @($parsed) }
+
+          $match = $null
+          foreach ($item in $items) {
+            $uniqueName = Get-Value $item @(
+              "Unique Name", "UniqueName", "SolutionUniqueName", "Name"
+            )
+            if ($uniqueName -ceq $env:SOLUTION_NAME) {
+              $match = $item
+              break
+            }
+          }
+
+          if ($null -eq $match) {
+            throw "The imported solution could not be found after import."
+          }
+
+          $solutionId = Get-Value $match @("Solution Id", "SolutionId", "Id")
+          $solutionVersion = Get-Value $match @("Version", "SolutionVersion")
+
+          "solution_id=$solutionId" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "solution_version=$solutionVersion" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Build workspace links
+        id: links
+        shell: pwsh
+        env:
+          ENVIRONMENT_ID: ${{ steps.environment_details.outputs.environment_id }}
+          SOLUTION_ID: ${{ steps.solution_details.outputs.solution_id }}
+        run: |
+          $makerUrl = "https://make.powerapps.com/environments/$env:ENVIRONMENT_ID"
+          $solutionsUrl = "$makerUrl/solutions"
+          $solutionUrl = if ([string]::IsNullOrWhiteSpace($env:SOLUTION_ID)) {
+            $solutionsUrl
+          }
+          else {
+            "$solutionsUrl/$env:SOLUTION_ID"
+          }
+
+          "maker_environment_url=$makerUrl" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "solutions_url=$solutionsUrl" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "solution_url=$solutionUrl" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload start-workspace artifact
+        if: inputs.upload_solution_artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: ${{ steps.export_baseline.outputs.artifact_folder }}
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Add workspace summary
+        shell: pwsh
+        env:
+          BRANCH_REF: ${{ inputs.branch_ref }}
+          SOURCE_ENVIRONMENT: ${{ inputs.source_environment }}
+          SOURCE_SOLUTION: ${{ inputs.source_solution_name }}
+          ENVIRONMENT_ACTION: ${{ steps.environment_details.outputs.environment_action }}
+          ENVIRONMENT_NAME: ${{ steps.names.outputs.environment_name }}
+          ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
+          MAKER_URL: ${{ steps.links.outputs.maker_environment_url }}
+          SOLUTIONS_URL: ${{ steps.links.outputs.solutions_url }}
+          SOLUTION_URL: ${{ steps.links.outputs.solution_url }}
+          SOLUTION_VERSION: ${{ steps.solution_details.outputs.solution_version }}
+          BASELINE_SHA: ${{ steps.commit_baseline.outputs.commit_sha || steps.no_commit_baseline.outputs.commit_sha }}
+          NEXT_STEP: ${{ inputs.next_step_message }}
+        run: |
+          @"
+          # Feature workspace ready
+
+          **Branch:** ``$env:BRANCH_REF``
+
+          **Baseline source:** [$env:SOURCE_SOLUTION]($env:SOURCE_ENVIRONMENT)
+
+          **Baseline commit:** ``$env:BASELINE_SHA``
+
+          **Environment handling:** $env:ENVIRONMENT_ACTION
+
+          **Developer environment:** [$env:ENVIRONMENT_NAME]($env:ENVIRONMENT_URL)
+
+          **Power Apps:** [Open maker environment]($env:MAKER_URL)
+
+          **Solutions:** [Open Solutions]($env:SOLUTIONS_URL)
+
+          **Solution:** [Open imported solution]($env:SOLUTION_URL)
+
+          **Solution version:** ``$env:SOLUTION_VERSION``
+
+          ## Next step
+
+          $env:NEXT_STEP
+          "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

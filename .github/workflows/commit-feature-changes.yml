@@ -1,0 +1,587 @@
+name: Reusable - Commit Power Platform Feature Changes
+
+on:
+  workflow_call:
+    inputs:
+      project_key:
+        required: true
+        type: string
+      branch_ref:
+        required: true
+        type: string
+      base_branch:
+        required: false
+        default: main
+        type: string
+      developer_alias:
+        required: true
+        type: string
+      developer_environment:
+        description: Developer environment name, URL or ID
+        required: true
+        type: string
+
+      solution_name:
+        required: true
+        type: string
+      solution_project_folder:
+        required: true
+        type: string
+      solution_source_folder:
+        required: true
+        type: string
+      export_managed:
+        required: false
+        default: false
+        type: boolean
+      export_async:
+        required: false
+        default: true
+        type: boolean
+      export_include:
+        required: false
+        default: ""
+        type: string
+
+      commit_changes:
+        required: false
+        default: true
+        type: boolean
+      push_changes:
+        required: false
+        default: true
+        type: boolean
+      commit_message:
+        required: false
+        default: Sync Power Platform feature changes
+        type: string
+      create_pull_request:
+        required: false
+        default: false
+        type: boolean
+      pull_request_title:
+        required: false
+        default: ""
+        type: string
+      pull_request_body:
+        required: false
+        default: ""
+        type: string
+      pull_request_draft:
+        required: false
+        default: true
+        type: boolean
+
+      max_async_wait_minutes:
+        required: false
+        default: 60
+        type: number
+      upload_solution_artifact:
+        required: false
+        default: true
+        type: boolean
+      artifact_retention_days:
+        required: false
+        default: 7
+        type: number
+
+    secrets:
+      pp_tenant_id:
+        required: true
+      pp_app_id:
+        required: true
+      pp_client_secret:
+        required: true
+
+    outputs:
+      branch_ref:
+        value: ${{ jobs.commit.outputs.branch_ref }}
+      developer_environment_id:
+        value: ${{ jobs.commit.outputs.developer_environment_id }}
+      developer_environment_name:
+        value: ${{ jobs.commit.outputs.developer_environment_name }}
+      developer_environment_url:
+        value: ${{ jobs.commit.outputs.developer_environment_url }}
+      changes_detected:
+        value: ${{ jobs.commit.outputs.changes_detected }}
+      commit_created:
+        value: ${{ jobs.commit.outputs.commit_created }}
+      commit_sha:
+        value: ${{ jobs.commit.outputs.commit_sha }}
+      push_completed:
+        value: ${{ jobs.commit.outputs.push_completed }}
+      compare_url:
+        value: ${{ jobs.commit.outputs.compare_url }}
+      pull_request_created:
+        value: ${{ jobs.commit.outputs.pull_request_created }}
+      pull_request_number:
+        value: ${{ jobs.commit.outputs.pull_request_number }}
+      pull_request_url:
+        value: ${{ jobs.commit.outputs.pull_request_url }}
+      solution_version:
+        value: ${{ jobs.commit.outputs.solution_version }}
+      solution_artifact_name:
+        value: ${{ jobs.commit.outputs.solution_artifact_name }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  commit:
+    name: Commit feature changes
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    concurrency:
+      group: power-platform-commit-${{ github.repository }}-${{ inputs.developer_alias }}
+      cancel-in-progress: false
+
+    outputs:
+      branch_ref: ${{ inputs.branch_ref }}
+      developer_environment_id: ${{ steps.environment.outputs.environment_id }}
+      developer_environment_name: ${{ steps.environment.outputs.environment_name }}
+      developer_environment_url: ${{ steps.environment.outputs.environment_url }}
+      changes_detected: ${{ steps.git_changes.outputs.changes_detected }}
+      commit_created: ${{ steps.git_changes.outputs.commit_created }}
+      commit_sha: ${{ steps.git_changes.outputs.commit_sha }}
+      push_completed: ${{ steps.git_changes.outputs.push_completed }}
+      compare_url: ${{ steps.links.outputs.compare_url }}
+      pull_request_created: ${{ steps.pull_request.outputs.pull_request_created }}
+      pull_request_number: ${{ steps.pull_request.outputs.pull_request_number }}
+      pull_request_url: ${{ steps.pull_request.outputs.pull_request_url }}
+      solution_version: ${{ steps.solution_details.outputs.solution_version }}
+      solution_artifact_name: ${{ steps.export.outputs.artifact_name }}
+
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.branch_ref }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Install Power Platform tools
+        uses: microsoft/powerplatform-actions/actions-install@v1
+        with:
+          add-tools-to-path: "true"
+
+      - name: Validate inputs
+        shell: pwsh
+        env:
+          BRANCH_REF: ${{ inputs.branch_ref }}
+          DEVELOPER_ENVIRONMENT: ${{ inputs.developer_environment }}
+          SOLUTION_PROJECT_FOLDER: ${{ inputs.solution_project_folder }}
+          SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if ([string]::IsNullOrWhiteSpace($env:BRANCH_REF)) {
+            throw "branch_ref is required."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:DEVELOPER_ENVIRONMENT)) {
+            throw "developer_environment is required."
+          }
+          if (-not (Test-Path -LiteralPath $env:SOLUTION_PROJECT_FOLDER -PathType Container)) {
+            throw "solution_project_folder was not found: $env:SOLUTION_PROJECT_FOLDER"
+          }
+
+          $sourceParent = Split-Path -Parent $env:SOLUTION_SOURCE_FOLDER
+          if (-not [string]::IsNullOrWhiteSpace($sourceParent)) {
+            New-Item -ItemType Directory -Path $sourceParent -Force | Out-Null
+          }
+
+      - name: Authenticate for environment administration
+        shell: pwsh
+        env:
+          PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          PP_APP_ID: ${{ secrets.pp_app_id }}
+          PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          pac auth create `
+            --name "GitHub-Feature-Commit-Admin-${{ github.run_id }}" `
+            --applicationId "$env:PP_APP_ID" `
+            --clientSecret "$env:PP_CLIENT_SECRET" `
+            --tenant "$env:PP_TENANT_ID"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Environment administration authentication failed."
+          }
+
+      - name: Resolve developer environment
+        id: environment
+        shell: pwsh
+        env:
+          REQUESTED_ENVIRONMENT: ${{ inputs.developer_environment }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Get-Value($Object, [string[]]$Names) {
+            foreach ($name in $Names) {
+              $property = $Object.PSObject.Properties[$name]
+              if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+                return [string]$property.Value
+              }
+            }
+            return ""
+          }
+
+          function Normalize-Url([string]$Value) {
+            return $Value.Trim().TrimEnd('/').ToLowerInvariant()
+          }
+
+          $raw = & pac admin list --environment "$env:REQUESTED_ENVIRONMENT" --json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to list Power Platform environments."
+          }
+
+          $parsed = ($raw -join "`n") | ConvertFrom-Json
+          $items = if ($null -ne $parsed.value) { @($parsed.value) } else { @($parsed) }
+          $match = $null
+
+          foreach ($item in $items) {
+            $name = Get-Value $item @("Environment", "DisplayName", "EnvironmentName", "FriendlyName", "Name")
+            $id = Get-Value $item @("Environment Id", "EnvironmentId", "Id")
+            $url = Get-Value $item @("Environment Url", "EnvironmentUrl", "Url")
+
+            if ($name -ceq $env:REQUESTED_ENVIRONMENT -or
+                $id -ceq $env:REQUESTED_ENVIRONMENT -or
+                (Normalize-Url $url) -eq (Normalize-Url $env:REQUESTED_ENVIRONMENT)) {
+              $match = $item
+              break
+            }
+          }
+
+          if ($null -eq $match) {
+            throw "The developer environment could not be resolved exactly."
+          }
+
+          "environment_id=$(Get-Value $match @('Environment Id','EnvironmentId','Id'))" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_name=$(Get-Value $match @('Environment','DisplayName','EnvironmentName','FriendlyName','Name'))" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_url=$(Get-Value $match @('Environment Url','EnvironmentUrl','Url'))" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Authenticate to developer environment
+        shell: pwsh
+        env:
+          PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          PP_APP_ID: ${{ secrets.pp_app_id }}
+          PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+          ENVIRONMENT_URL: ${{ steps.environment.outputs.environment_url }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          pac auth create `
+            --name "GitHub-Feature-Commit-Target-${{ github.run_id }}" `
+            --applicationId "$env:PP_APP_ID" `
+            --clientSecret "$env:PP_CLIENT_SECRET" `
+            --tenant "$env:PP_TENANT_ID" `
+            --environment "$env:ENVIRONMENT_URL"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Authentication to the developer environment failed."
+          }
+
+      - name: Export current feature solution
+        id: export
+        shell: pwsh
+        env:
+          ENVIRONMENT_URL: ${{ steps.environment.outputs.environment_url }}
+          SOLUTION_NAME: ${{ inputs.solution_name }}
+          EXPORT_MANAGED: ${{ inputs.export_managed }}
+          EXPORT_ASYNC: ${{ inputs.export_async }}
+          EXPORT_INCLUDE: ${{ inputs.export_include }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $artifactFolder = Join-Path $env:RUNNER_TEMP "power-platform-feature-commit"
+          New-Item -ItemType Directory -Path $artifactFolder -Force | Out-Null
+
+          $solutionZip = Join-Path $artifactFolder "$($env:SOLUTION_NAME)-environment.zip"
+
+          $arguments = @(
+            "solution", "export",
+            "--environment", $env:ENVIRONMENT_URL,
+            "--name", $env:SOLUTION_NAME,
+            "--path", $solutionZip,
+            "--overwrite",
+            "--max-async-wait-time", $env:MAX_WAIT
+          )
+
+          if ($env:EXPORT_MANAGED -eq "true") { $arguments += "--managed" }
+          if ($env:EXPORT_ASYNC -eq "true") { $arguments += "--async" }
+          if (-not [string]::IsNullOrWhiteSpace($env:EXPORT_INCLUDE)) {
+            $arguments += @("--include", $env:EXPORT_INCLUDE)
+          }
+
+          & pac @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "The feature solution export failed."
+          }
+
+          $artifactName = "$($env:SOLUTION_NAME)-feature-changes-${{ github.run_number }}"
+
+          "solution_zip=$solutionZip" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "artifact_folder=$artifactFolder" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "artifact_name=$artifactName" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Unpack current feature solution
+        shell: pwsh
+        env:
+          SOLUTION_ZIP: ${{ steps.export.outputs.solution_zip }}
+          SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
+          EXPORT_MANAGED: ${{ inputs.export_managed }}
+          ARTIFACT_FOLDER: ${{ steps.export.outputs.artifact_folder }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $packageType = if ($env:EXPORT_MANAGED -eq "true") { "Managed" } else { "Unmanaged" }
+          $unpackLog = Join-Path $env:ARTIFACT_FOLDER "solution-unpack.log"
+
+          & pac solution unpack `
+            --zipfile "$env:SOLUTION_ZIP" `
+            --folder "$env:SOLUTION_SOURCE_FOLDER" `
+            --packagetype "$packageType" `
+            --allowWrite `
+            --allowDelete `
+            --clobber `
+            --errorlevel Verbose `
+            --log "$unpackLog"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "The exported solution could not be unpacked."
+          }
+
+      - name: Commit and push feature changes
+        id: git_changes
+        shell: pwsh
+        env:
+          BRANCH_REF: ${{ inputs.branch_ref }}
+          SOLUTION_PROJECT_FOLDER: ${{ inputs.solution_project_folder }}
+          COMMIT_MESSAGE: ${{ inputs.commit_message }}
+          COMMIT_CHANGES: ${{ inputs.commit_changes }}
+          PUSH_CHANGES: ${{ inputs.push_changes }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add --all -- "$env:SOLUTION_PROJECT_FOLDER"
+          git diff --cached --quiet
+
+          if ($LASTEXITCODE -eq 0) {
+            $sha = (git rev-parse HEAD).Trim()
+            "changes_detected=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "commit_created=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "push_completed=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "commit_sha=$sha" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+
+          "changes_detected=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          if ($env:COMMIT_CHANGES -ne "true") {
+            "commit_created=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "push_completed=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "commit_sha=$(git rev-parse HEAD)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+
+          git commit -m "$env:COMMIT_MESSAGE"
+          if ($LASTEXITCODE -ne 0) {
+            throw "The feature commit failed."
+          }
+
+          $sha = (git rev-parse HEAD).Trim()
+          "commit_created=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "commit_sha=$sha" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          if ($env:PUSH_CHANGES -eq "true") {
+            git push origin "HEAD:$env:BRANCH_REF"
+            if ($LASTEXITCODE -ne 0) {
+              throw "The feature commit could not be pushed."
+            }
+            "push_completed=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
+          else {
+            "push_completed=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
+
+      - name: Retrieve solution version
+        id: solution_details
+        shell: pwsh
+        env:
+          ENVIRONMENT_URL: ${{ steps.environment.outputs.environment_url }}
+          SOLUTION_NAME: ${{ inputs.solution_name }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Get-Value($Object, [string[]]$Names) {
+            foreach ($name in $Names) {
+              $property = $Object.PSObject.Properties[$name]
+              if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+                return [string]$property.Value
+              }
+            }
+            return ""
+          }
+
+          $raw = & pac solution list --environment "$env:ENVIRONMENT_URL" --json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to list solutions."
+          }
+
+          $parsed = ($raw -join "`n") | ConvertFrom-Json
+          $items = if ($null -ne $parsed.value) { @($parsed.value) } else { @($parsed) }
+          $version = ""
+
+          foreach ($item in $items) {
+            $uniqueName = Get-Value $item @("Unique Name", "UniqueName", "SolutionUniqueName", "Name")
+            if ($uniqueName -ceq $env:SOLUTION_NAME) {
+              $version = Get-Value $item @("Version", "SolutionVersion")
+              break
+            }
+          }
+
+          "solution_version=$version" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Build compare link
+        id: links
+        shell: pwsh
+        env:
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          BRANCH_REF: ${{ inputs.branch_ref }}
+        run: |
+          $base = [uri]::EscapeDataString($env:BASE_BRANCH)
+          $branch = [uri]::EscapeDataString($env:BRANCH_REF)
+          $compareUrl = "${{ github.server_url }}/${{ github.repository }}/compare/$base...$branch"
+          "compare_url=$compareUrl" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Create or locate pull request
+        id: pull_request
+        if: inputs.create_pull_request
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH_REF: ${{ inputs.branch_ref }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          PR_TITLE: ${{ inputs.pull_request_title }}
+          PR_BODY: ${{ inputs.pull_request_body }}
+          PR_DRAFT: ${{ inputs.pull_request_draft }}
+          PROJECT_KEY: ${{ inputs.project_key }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $existingJson = gh pr list `
+            --head "$env:BRANCH_REF" `
+            --base "$env:BASE_BRANCH" `
+            --state open `
+            --json number,url
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to search for an existing pull request."
+          }
+
+          $existing = @($existingJson | ConvertFrom-Json)
+          if ($existing.Count -gt 0) {
+            "pull_request_created=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "pull_request_number=$($existing[0].number)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "pull_request_url=$($existing[0].url)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+
+          $title = if ([string]::IsNullOrWhiteSpace($env:PR_TITLE)) {
+            "$($env:PROJECT_KEY): $($env:BRANCH_REF)"
+          }
+          else {
+            $env:PR_TITLE
+          }
+
+          $body = if ([string]::IsNullOrWhiteSpace($env:PR_BODY)) {
+            "Power Platform feature changes exported from the developer environment."
+          }
+          else {
+            $env:PR_BODY
+          }
+
+          $arguments = @(
+            "pr", "create",
+            "--base", $env:BASE_BRANCH,
+            "--head", $env:BRANCH_REF,
+            "--title", $title,
+            "--body", $body
+          )
+          if ($env:PR_DRAFT -eq "true") {
+            $arguments += "--draft"
+          }
+
+          $url = (& gh @arguments).Trim()
+          if ($LASTEXITCODE -ne 0) {
+            throw "The pull request could not be created."
+          }
+
+          $number = ($url.TrimEnd('/') -split '/')[-1]
+
+          "pull_request_created=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "pull_request_number=$number" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "pull_request_url=$url" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Record pull request outputs when disabled
+        id: no_pull_request
+        if: ${{ !inputs.create_pull_request }}
+        shell: pwsh
+        run: |
+          "pull_request_created=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "pull_request_number=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "pull_request_url=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload feature-change artifact
+        if: inputs.upload_solution_artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.export.outputs.artifact_name }}
+          path: ${{ steps.export.outputs.artifact_folder }}
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Add feature-change summary
+        shell: pwsh
+        env:
+          BRANCH_REF: ${{ inputs.branch_ref }}
+          ENVIRONMENT_NAME: ${{ steps.environment.outputs.environment_name }}
+          ENVIRONMENT_URL: ${{ steps.environment.outputs.environment_url }}
+          CHANGES_DETECTED: ${{ steps.git_changes.outputs.changes_detected }}
+          COMMIT_SHA: ${{ steps.git_changes.outputs.commit_sha }}
+          COMPARE_URL: ${{ steps.links.outputs.compare_url }}
+          PR_URL: ${{ steps.pull_request.outputs.pull_request_url }}
+          SOLUTION_VERSION: ${{ steps.solution_details.outputs.solution_version }}
+        run: |
+          $pullRequestLine = if ([string]::IsNullOrWhiteSpace($env:PR_URL)) {
+            "[Open comparison]($env:COMPARE_URL)"
+          }
+          else {
+            "[Open pull request]($env:PR_URL)"
+          }
+
+          @"
+          # Feature changes committed
+
+          **Branch:** ``$env:BRANCH_REF``
+
+          **Developer environment:** [$env:ENVIRONMENT_NAME]($env:ENVIRONMENT_URL)
+
+          **Changes detected:** ``$env:CHANGES_DETECTED``
+
+          **Commit:** ``$env:COMMIT_SHA``
+
+          **Solution version:** ``$env:SOLUTION_VERSION``
+
+          $pullRequestLine
+          "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
