@@ -1,48 +1,64 @@
-name: Reusable - Start Power Platform Feature Workspace
+name: Reusable - Manage Power Platform Feature Workspace
 
 on:
   workflow_call:
     inputs:
+      workspace_action:
+        description: PrepareOrReuse or DeleteEnvironment
+        required: false
+        default: PrepareOrReuse
+        type: string
+
       project_key:
-        description: Short project identifier used for naming
+        description: Short project identifier used for naming and safety checks
         required: true
         type: string
+
       branch_ref:
-        description: Feature branch to update and deploy
-        required: true
+        description: Feature branch to update when preparing a workspace
+        required: false
+        default: ""
         type: string
+
       base_branch:
         description: Main integration branch
         required: false
         default: main
         type: string
+
       developer_alias:
         description: Short developer identifier
         required: true
         type: string
+
       developer_upn:
         description: Developer Microsoft 365 UPN or Entra object ID
-        required: true
+        required: false
+        default: ""
         type: string
 
       source_environment:
-        description: Dataverse source environment URL or ID
-        required: true
+        description: Source environment URL, ID or unique name
+        required: false
+        default: ""
         type: string
+
       source_solution_name:
         description: Solution unique name in the source environment
-        required: true
+        required: false
+        default: ""
         type: string
+
       source_export_managed:
-        description: Export the source solution as managed
         required: false
         default: false
         type: boolean
+
       source_export_async:
-        description: Export the source solution asynchronously
         required: false
         default: true
         type: boolean
+
       source_export_include:
         description: Optional comma-separated export settings
         required: false
@@ -50,22 +66,29 @@ on:
         type: string
 
       solution_name:
-        description: Canonical solution unique name used in the repository and target
-        required: true
+        description: Canonical solution unique name
+        required: false
+        default: ""
         type: string
+
       solution_project_folder:
         description: Repository folder containing the cdsproj and source folder
-        required: true
+        required: false
+        default: ""
         type: string
+
       solution_source_folder:
         description: Repository folder containing unpacked solution source
-        required: true
+        required: false
+        default: ""
         type: string
+
       solution_package_type:
-        description: Package type imported into the developer environment
+        description: Unmanaged or Managed
         required: false
         default: Unmanaged
         type: string
+
       deployment_settings_file:
         description: Optional deployment settings JSON path
         required: false
@@ -73,215 +96,314 @@ on:
         type: string
 
       commit_baseline_to_branch:
-        description: Commit source-environment files to the feature branch
         required: false
         default: true
         type: boolean
+
       baseline_commit_message:
-        description: Commit message used for the baseline sync
         required: false
         default: Sync baseline Power Platform solution
         type: string
 
-      target_environment_name:
-        description: Exact developer environment name. Generated when blank.
+      workspace_environment:
+        description: >
+          PrepareOrReuse: exact environment display name, or blank to generate.
+          DeleteEnvironment: environment name, URL or ID.
         required: false
         default: ""
         type: string
-      target_environment_domain:
-        description: Dataverse domain. Generated when blank.
+
+      workspace_environment_domain:
+        description: Dataverse domain used only when creating an environment
         required: false
         default: ""
         type: string
-      target_environment_suffix:
-        description: Suffix used when generating the environment name
+
+      workspace_environment_suffix:
         required: false
         default: DEV
         type: string
-      target_environment_mode:
+
+      workspace_environment_mode:
         description: ReuseOrCreate or CreateOnly
         required: false
         default: ReuseOrCreate
         type: string
-      target_environment_type:
-        description: Developer, Sandbox, Trial, Production, Teams or SubscriptionBasedTrial
+
+      workspace_environment_type:
+        description: Developer, Sandbox, Trial or SubscriptionBasedTrial
         required: false
         default: Developer
         type: string
-      target_environment_region:
+
+      workspace_environment_region:
         description: Power Platform region
         required: false
         default: europe
         type: string
-      target_environment_currency:
+
+      workspace_environment_currency:
         description: Dataverse currency code
         required: false
         default: GBP
         type: string
-      target_environment_language:
+
+      workspace_environment_language:
         description: Environment language
         required: false
         default: English
         type: string
-      target_environment_templates:
-        description: Optional comma-separated Dynamics 365 templates
+
+      workspace_environment_templates:
         required: false
         default: ""
         type: string
-      target_environment_security_group_id:
-        description: Optional Entra security group ID
+
+      workspace_environment_security_group_id:
         required: false
         default: ""
         type: string
+
       environment_create_async:
-        description: Create the environment asynchronously
         required: false
         default: true
         type: boolean
 
       assign_automation_user:
-        description: Assign the automation application user
         required: false
         default: true
         type: boolean
+
       automation_role:
-        description: Dataverse role for the automation application
         required: false
         default: System Administrator
         type: string
+
       assign_developer:
-        description: Assign the human developer
         required: false
         default: true
         type: boolean
+
       developer_role:
-        description: Dataverse role for the developer
         required: false
         default: System Administrator
         type: string
 
       force_overwrite:
-        description: Force overwrite unmanaged customisations
         required: false
         default: true
         type: boolean
+
       publish_changes:
-        description: Publish after a successful import
         required: false
         default: true
         type: boolean
+
       asynchronous_import:
-        description: Import asynchronously
-        required: false
-        default: false
-        type: boolean
-      activate_plugins:
-        description: Activate plug-ins and workflows during import
-        required: false
-        default: false
-        type: boolean
-      skip_dependency_check:
-        description: Skip product-update dependency checks
-        required: false
-        default: false
-        type: boolean
-      skip_lower_version:
-        description: Skip import when same or higher version exists
         required: false
         default: false
         type: boolean
 
-      max_async_wait_minutes:
-        description: PAC wait time for long-running operations
+      activate_plugins:
         required: false
-        default: 60
-        type: number
-      environment_lookup_attempts:
-        description: Attempts used to retrieve a newly created environment
+        default: false
+        type: boolean
+
+      skip_dependency_check:
         required: false
-        default: 20
-        type: number
-      environment_lookup_delay_seconds:
-        description: Delay between environment lookup attempts
+        default: false
+        type: boolean
+
+      skip_lower_version:
         required: false
-        default: 30
-        type: number
-      upload_solution_artifact:
-        description: Upload exported and packed solution files
+        default: false
+        type: boolean
+
+      deletion_confirmation:
+        description: Required for deletion. Must equal DELETE:resolved-environment-name
+        required: false
+        default: ""
+        type: string
+
+      expected_environment_name_prefix:
+        description: Safe environment-name prefix required for deletion
+        required: false
+        default: ""
+        type: string
+
+      allowed_environment_types:
+        description: Comma-separated environment types allowed for deletion
+        required: false
+        default: Developer,Sandbox,Trial,SubscriptionBasedTrial
+        type: string
+
+      asynchronous_delete:
         required: false
         default: true
         type: boolean
+
+      max_async_wait_minutes:
+        required: false
+        default: 60
+        type: number
+
+      environment_lookup_attempts:
+        required: false
+        default: 20
+        type: number
+
+      environment_lookup_delay_seconds:
+        required: false
+        default: 30
+        type: number
+
+      upload_solution_artifact:
+        required: false
+        default: true
+        type: boolean
+
       artifact_retention_days:
-        description: Artifact retention in days
         required: false
         default: 7
         type: number
+
       next_step_message:
-        description: Project-specific instruction shown in the summary
         required: false
-        default: Open the solution and begin the feature work.
+        default: Open the imported solution and begin development.
         type: string
 
     secrets:
       pp_tenant_id:
         required: true
+
       pp_app_id:
         required: true
+
       pp_client_secret:
         required: true
+
       source_pp_tenant_id:
         required: false
+
       source_pp_app_id:
         required: false
+
       source_pp_client_secret:
         required: false
 
     outputs:
-      branch_ref:
-        description: Feature branch prepared by the workflow
-        value: ${{ jobs.start.outputs.branch_ref }}
-      baseline_changes_detected:
-        description: Whether source-environment files changed the branch
-        value: ${{ jobs.start.outputs.baseline_changes_detected }}
-      baseline_commit_sha:
-        description: Baseline commit SHA
-        value: ${{ jobs.start.outputs.baseline_commit_sha }}
-      developer_environment_action:
-        description: Created or Reused
-        value: ${{ jobs.start.outputs.developer_environment_action }}
-      developer_environment_id:
-        description: Developer environment ID
-        value: ${{ jobs.start.outputs.developer_environment_id }}
-      developer_environment_name:
-        description: Developer environment display name
-        value: ${{ jobs.start.outputs.developer_environment_name }}
-      developer_environment_url:
-        description: Developer environment Dataverse URL
-        value: ${{ jobs.start.outputs.developer_environment_url }}
+      workspace_action:
+        value: ${{ jobs.validate.outputs.workspace_action }}
+
+      workspace_status:
+        value: >-
+          ${{ jobs.prepare.outputs.developer_environment_action ||
+          jobs.delete.outputs.deletion_status }}
+
+      environment_id:
+        value: >-
+          ${{ jobs.prepare.outputs.developer_environment_id ||
+          jobs.delete.outputs.environment_id }}
+
+      environment_name:
+        value: >-
+          ${{ jobs.prepare.outputs.developer_environment_name ||
+          jobs.delete.outputs.environment_name }}
+
+      environment_url:
+        value: >-
+          ${{ jobs.prepare.outputs.developer_environment_url ||
+          jobs.delete.outputs.environment_url }}
+
       maker_environment_url:
-        description: Power Apps maker environment link
-        value: ${{ jobs.start.outputs.maker_environment_url }}
-      solutions_url:
-        description: Power Apps Solutions area link
-        value: ${{ jobs.start.outputs.solutions_url }}
-      solution_id:
-        description: Imported solution ID
-        value: ${{ jobs.start.outputs.solution_id }}
+        value: ${{ jobs.prepare.outputs.maker_environment_url }}
+
       solution_url:
-        description: Power Apps solution link
-        value: ${{ jobs.start.outputs.solution_url }}
+        value: ${{ jobs.prepare.outputs.solution_url }}
+
       solution_version:
-        description: Imported solution version
-        value: ${{ jobs.start.outputs.solution_version }}
-      solution_artifact_name:
-        description: Artifact containing packages and logs
-        value: ${{ jobs.start.outputs.solution_artifact_name }}
+        value: ${{ jobs.prepare.outputs.solution_version }}
+
+      baseline_commit_sha:
+        value: ${{ jobs.prepare.outputs.baseline_commit_sha }}
+
+      deleted:
+        value: ${{ jobs.delete.outputs.deleted }}
 
 permissions:
   contents: write
 
+
 jobs:
-  start:
+  validate:
+    name: Validate workspace request
+    runs-on: ubuntu-latest
+
+    outputs:
+      workspace_action: ${{ steps.validate.outputs.workspace_action }}
+
+    steps:
+      - name: Validate action and environment inputs
+        id: validate
+        shell: bash
+        env:
+          WORKSPACE_ACTION: ${{ inputs.workspace_action }}
+          PROJECT_KEY: ${{ inputs.project_key }}
+          WORKSPACE_ENVIRONMENT: ${{ inputs.workspace_environment }}
+          SOURCE_ENVIRONMENT: ${{ inputs.source_environment }}
+          DEVELOPER_UPN: ${{ inputs.developer_upn }}
+          EXPECTED_PREFIX: ${{ inputs.expected_environment_name_prefix }}
+          DELETION_CONFIRMATION: ${{ inputs.deletion_confirmation }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$PROJECT_KEY" ]]; then
+            echo "project_key is required."
+            exit 1
+          fi
+
+          case "$WORKSPACE_ACTION" in
+            PrepareOrReuse)
+              if [[ -z "$SOURCE_ENVIRONMENT" ]]; then
+                echo "source_environment is required for PrepareOrReuse."
+                exit 1
+              fi
+
+              if [[ -z "$DEVELOPER_UPN" ]]; then
+                echo "developer_upn is required for PrepareOrReuse."
+                exit 1
+              fi
+              ;;
+
+            DeleteEnvironment)
+              if [[ -z "$WORKSPACE_ENVIRONMENT" ]]; then
+                echo "workspace_environment is required for DeleteEnvironment."
+                exit 1
+              fi
+
+              if [[ -z "$EXPECTED_PREFIX" ]]; then
+                echo "expected_environment_name_prefix is required for deletion."
+                exit 1
+              fi
+
+              if [[ -z "$DELETION_CONFIRMATION" ]]; then
+                echo "deletion_confirmation is required for deletion."
+                exit 1
+              fi
+              ;;
+
+            *)
+              echo "workspace_action must be PrepareOrReuse or DeleteEnvironment."
+              exit 1
+              ;;
+          esac
+
+          echo "workspace_action=$WORKSPACE_ACTION" >> "$GITHUB_OUTPUT"
+
+  prepare:
+    needs: validate
+    if: inputs.workspace_action == 'PrepareOrReuse'
+
     name: Start feature workspace
     runs-on: windows-latest
     timeout-minutes: 150
@@ -328,8 +450,8 @@ jobs:
           SOLUTION_PROJECT_FOLDER: ${{ inputs.solution_project_folder }}
           SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
           SOLUTION_PACKAGE_TYPE: ${{ inputs.solution_package_type }}
-          TARGET_MODE: ${{ inputs.target_environment_mode }}
-          TARGET_TYPE: ${{ inputs.target_environment_type }}
+          TARGET_MODE: ${{ inputs.workspace_environment_mode }}
+          TARGET_TYPE: ${{ inputs.workspace_environment_type }}
           MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
         run: |
           $ErrorActionPreference = "Stop"
@@ -562,9 +684,9 @@ jobs:
         env:
           PROJECT_KEY: ${{ inputs.project_key }}
           DEVELOPER_ALIAS: ${{ inputs.developer_alias }}
-          REQUESTED_NAME: ${{ inputs.target_environment_name }}
-          REQUESTED_DOMAIN: ${{ inputs.target_environment_domain }}
-          SUFFIX: ${{ inputs.target_environment_suffix }}
+          REQUESTED_NAME: ${{ inputs.workspace_environment }}
+          REQUESTED_DOMAIN: ${{ inputs.workspace_environment_domain }}
+          SUFFIX: ${{ inputs.workspace_environment_suffix }}
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -695,7 +817,7 @@ jobs:
             Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Enforce target environment mode
-        if: steps.find_environment.outputs.exists == 'true' && inputs.target_environment_mode == 'CreateOnly'
+        if: steps.find_environment.outputs.exists == 'true' && inputs.workspace_environment_mode == 'CreateOnly'
         shell: pwsh
         env:
           ENVIRONMENT_NAME: ${{ steps.names.outputs.environment_name }}
@@ -708,13 +830,13 @@ jobs:
         env:
           ENVIRONMENT_NAME: ${{ steps.names.outputs.environment_name }}
           ENVIRONMENT_DOMAIN: ${{ steps.names.outputs.environment_domain }}
-          ENVIRONMENT_TYPE: ${{ inputs.target_environment_type }}
+          ENVIRONMENT_TYPE: ${{ inputs.workspace_environment_type }}
           DEVELOPER_UPN: ${{ inputs.developer_upn }}
-          REGION: ${{ inputs.target_environment_region }}
-          CURRENCY: ${{ inputs.target_environment_currency }}
-          LANGUAGE: ${{ inputs.target_environment_language }}
-          TEMPLATES: ${{ inputs.target_environment_templates }}
-          SECURITY_GROUP_ID: ${{ inputs.target_environment_security_group_id }}
+          REGION: ${{ inputs.workspace_environment_region }}
+          CURRENCY: ${{ inputs.workspace_environment_currency }}
+          LANGUAGE: ${{ inputs.workspace_environment_language }}
+          TEMPLATES: ${{ inputs.workspace_environment_templates }}
+          SECURITY_GROUP_ID: ${{ inputs.workspace_environment_security_group_id }}
           CREATE_ASYNC: ${{ inputs.environment_create_async }}
           MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
         run: |
@@ -1123,4 +1245,253 @@ jobs:
           ## Next step
 
           $env:NEXT_STEP
+          "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+  delete:
+    needs: validate
+    if: inputs.workspace_action == 'DeleteEnvironment'
+
+    name: Delete Power Platform workspace
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    concurrency:
+      group: power-platform-delete-${{ github.repository }}-${{ inputs.workspace_environment }}
+      cancel-in-progress: false
+
+    outputs:
+      environment_found: ${{ steps.resolve.outputs.environment_found }}
+      environment_id: ${{ steps.resolve.outputs.environment_id }}
+      environment_name: ${{ steps.resolve.outputs.environment_name }}
+      environment_url: ${{ steps.resolve.outputs.environment_url }}
+      environment_type: ${{ steps.resolve.outputs.environment_type }}
+      ownership_verified: ${{ steps.verify.outputs.ownership_verified }}
+      deletion_started: ${{ steps.remove.outputs.deletion_started || steps.not_found.outputs.deletion_started }}
+      deleted: ${{ steps.remove.outputs.deleted || steps.not_found.outputs.deleted }}
+      deletion_status: ${{ steps.remove.outputs.deletion_status || steps.not_found.outputs.deletion_status }}
+
+    steps:
+      - name: Install Power Platform tools
+        uses: microsoft/powerplatform-actions/actions-install@v1
+        with:
+          add-tools-to-path: "true"
+
+      - name: Authenticate for environment administration
+        shell: pwsh
+        env:
+          PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          PP_APP_ID: ${{ secrets.pp_app_id }}
+          PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          pac auth create `
+            --name "pp-delete-admin" `
+            --applicationId "$env:PP_APP_ID" `
+            --clientSecret "$env:PP_CLIENT_SECRET" `
+            --tenant "$env:PP_TENANT_ID"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Environment administration authentication failed."
+          }
+
+      - name: Resolve environment exactly
+        id: resolve
+        shell: pwsh
+        env:
+          REQUESTED_ENVIRONMENT: ${{ inputs.workspace_environment }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Get-Value($Object, [string[]]$Names) {
+            if ($null -eq $Object) {
+              return ""
+            }
+
+            $properties = $Object.PSObject.Properties
+            if ($null -eq $properties) {
+              return ""
+            }
+
+            foreach ($name in $Names) {
+              $property = $properties[$name]
+              if ($null -ne $property -and
+                  -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+                return [string]$property.Value
+              }
+            }
+
+            return ""
+          }
+
+          function Normalize-Url([string]$Value) {
+            return $Value.Trim().TrimEnd('/').ToLowerInvariant()
+          }
+
+          $raw = & pac admin list --environment "$env:REQUESTED_ENVIRONMENT" --json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to list Power Platform environments."
+          }
+
+          $text = $raw -join "`n"
+          if ([string]::IsNullOrWhiteSpace($text)) {
+            "environment_found=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "environment_id=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "environment_name=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "environment_url=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "environment_type=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+
+          $parsed = $text | ConvertFrom-Json
+          $items = if ($null -ne $parsed.value) { @($parsed.value) } else { @($parsed) }
+          $match = $null
+
+          foreach ($item in $items) {
+            $name = Get-Value $item @("Environment", "DisplayName", "EnvironmentName", "FriendlyName", "Name")
+            $id = Get-Value $item @("Environment Id", "EnvironmentId", "Id")
+            $url = Get-Value $item @("Environment Url", "EnvironmentUrl", "Url")
+
+            if ($name -ceq $env:REQUESTED_ENVIRONMENT -or
+                $id -ceq $env:REQUESTED_ENVIRONMENT -or
+                (Normalize-Url $url) -eq (Normalize-Url $env:REQUESTED_ENVIRONMENT)) {
+              $match = $item
+              break
+            }
+          }
+
+          if ($null -eq $match) {
+            "environment_found=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "environment_id=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "environment_name=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "environment_url=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "environment_type=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+
+          "environment_found=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_id=$(Get-Value $match @('Environment Id','EnvironmentId','Id'))" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_name=$(Get-Value $match @('Environment','DisplayName','EnvironmentName','FriendlyName','Name'))" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_url=$(Get-Value $match @('Environment Url','EnvironmentUrl','Url'))" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_type=$(Get-Value $match @('Type','EnvironmentType'))" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Stop when environment does not exist
+        if: steps.resolve.outputs.environment_found == 'false'
+        shell: pwsh
+        run: |
+          "The environment was not found. Nothing was deleted." | Write-Host
+
+      - name: Verify deletion safety
+        id: verify
+        if: steps.resolve.outputs.environment_found == 'true'
+        shell: pwsh
+        env:
+          RESOLVED_NAME: ${{ steps.resolve.outputs.environment_name }}
+          RESOLVED_TYPE: ${{ steps.resolve.outputs.environment_type }}
+          EXPECTED_NAME: ""
+          EXPECTED_PREFIX: ${{ inputs.expected_environment_name_prefix }}
+          ALLOWED_TYPES: ${{ inputs.allowed_environment_types }}
+          CONFIRMATION: ${{ inputs.deletion_confirmation }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if ([string]::IsNullOrWhiteSpace($env:EXPECTED_PREFIX)) {
+            throw "expected_environment_name_prefix cannot be blank."
+          }
+
+          if (-not $env:RESOLVED_NAME.StartsWith(
+              $env:EXPECTED_PREFIX,
+              [System.StringComparison]::OrdinalIgnoreCase
+            )) {
+            throw "Resolved environment name does not match the approved prefix."
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:EXPECTED_NAME) -and
+              $env:RESOLVED_NAME -cne $env:EXPECTED_NAME) {
+            throw "Resolved environment name does not match expected_environment_name."
+          }
+
+          $allowed = @($env:ALLOWED_TYPES.Split(',') | ForEach-Object { $_.Trim() })
+
+          if ($env:RESOLVED_TYPE -in @("Production", "Default") -or
+              $allowed -notcontains $env:RESOLVED_TYPE) {
+            throw "Environment type '$env:RESOLVED_TYPE' is protected or not approved."
+          }
+
+          $expectedConfirmation = "DELETE:$($env:RESOLVED_NAME)"
+          if ($env:CONFIRMATION -cne $expectedConfirmation) {
+            throw "Deletion requires confirmation text: $expectedConfirmation"
+          }
+
+          "ownership_verified=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Delete environment
+        id: remove
+        if: steps.resolve.outputs.environment_found == 'true' && steps.verify.outputs.ownership_verified == 'true'
+        shell: pwsh
+        env:
+          ENVIRONMENT_ID: ${{ steps.resolve.outputs.environment_id }}
+          DELETE_ASYNC: ${{ inputs.asynchronous_delete }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $arguments = @(
+            "admin", "delete",
+            "--environment", $env:ENVIRONMENT_ID,
+            "--max-async-wait-time", $env:MAX_WAIT
+          )
+
+          if ($env:DELETE_ASYNC -eq "true") {
+            $arguments += "--async"
+          }
+
+          "deletion_started=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          & pac @arguments
+          if ($LASTEXITCODE -ne 0) {
+            "deleted=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "deletion_status=Failed" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            throw "The Power Platform environment could not be deleted."
+          }
+
+          "deleted=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "deletion_status=Deleted" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Record not-found deletion result
+        id: not_found
+        if: steps.resolve.outputs.environment_found == 'false'
+        shell: pwsh
+        run: |
+          "deletion_started=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "deleted=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "deletion_status=NotFound" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Add deletion summary
+        if: always()
+        shell: pwsh
+        env:
+          FOUND: ${{ steps.resolve.outputs.environment_found }}
+          NAME: ${{ steps.resolve.outputs.environment_name }}
+          TYPE: ${{ steps.resolve.outputs.environment_type }}
+          URL: ${{ steps.resolve.outputs.environment_url }}
+          VERIFIED: ${{ steps.verify.outputs.ownership_verified }}
+          STATUS: ${{ steps.remove.outputs.deletion_status || steps.not_found.outputs.deletion_status }}
+        run: |
+          @"
+          # Workspace deletion
+
+          **Environment found:** ``$env:FOUND``
+
+          **Environment:** [$env:NAME]($env:URL)
+
+          **Type:** ``$env:TYPE``
+
+          **Safety checks passed:** ``$env:VERIFIED``
+
+          **Deletion status:** ``$env:STATUS``
           "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

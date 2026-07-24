@@ -1,0 +1,99 @@
+name: Commit Feature Changes
+
+run-name: >-
+  Commit Power Platform changes from
+  ${{ inputs.developer_environment || vars.PP_DEFAULT_DEVELOPER_ENVIRONMENT }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      developer_alias:
+        description: Short developer identifier. Leave blank to use the repository variable.
+        required: false
+        default: ""
+        type: string
+
+      developer_environment:
+        description: Developer environment name, URL or ID. Leave blank to use the repository variable.
+        required: false
+        default: ""
+        type: string
+
+      commit_message:
+        description: Leave blank to generate the commit message
+        required: false
+        default: ""
+        type: string
+
+      create_pull_request:
+        description: Create a pull request after pushing the solution changes
+        required: true
+        default: true
+        type: boolean
+
+      pull_request_title:
+        description: Leave blank to generate the title
+        required: false
+        default: ""
+        type: string
+
+      pull_request_draft:
+        description: Create the pull request as a draft
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  commit:
+    uses: >-
+      KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/commit-feature-changes.yml@main
+
+    with:
+      project_key: ${{ vars.PP_PROJECT_KEY }}
+      branch_ref: ${{ github.ref_name }}
+      base_branch: ${{ vars.PP_BASE_BRANCH || 'main' }}
+
+      developer_alias: >-
+        ${{ inputs.developer_alias ||
+        vars.PP_DEFAULT_DEVELOPER_ALIAS }}
+
+      developer_environment: >-
+        ${{ inputs.developer_environment ||
+        vars.PP_DEFAULT_DEVELOPER_ENVIRONMENT }}
+
+      solution_name: ${{ vars.PP_SOLUTION_NAME }}
+      solution_project_folder: ${{ vars.PP_SOLUTION_PROJECT_FOLDER }}
+      solution_source_folder: ${{ vars.PP_SOLUTION_SOURCE_FOLDER }}
+
+      export_managed: false
+      export_async: true
+
+      commit_changes: true
+      push_changes: true
+
+      commit_message: >-
+        ${{ inputs.commit_message ||
+        format(
+        'Sync {0} feature changes',
+        vars.PP_SOLUTION_NAME
+        ) }}
+
+      create_pull_request: ${{ inputs.create_pull_request }}
+      pull_request_title: ${{ inputs.pull_request_title }}
+
+      pull_request_body: >-
+        Power Platform changes exported from the feature developer environment.
+
+      pull_request_draft: ${{ inputs.pull_request_draft }}
+
+      upload_solution_artifact: true
+      artifact_retention_days: 7
+
+    secrets:
+      pp_tenant_id: ${{ secrets.PP_TENANT_ID }}
+      pp_app_id: ${{ secrets.PP_APP_ID }}
+      pp_client_secret: ${{ secrets.PP_CLIENT_SECRET }}

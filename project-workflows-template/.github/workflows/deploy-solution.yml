@@ -1,0 +1,72 @@
+name: Deploy Solution from Git
+
+run-name: >-
+  Deploy ${{ vars.PP_SOLUTION_NAME }}
+  from ${{ inputs.source_ref }}
+  to ${{ inputs.target_environment || vars.PP_DEFAULT_DEPLOYMENT_ENVIRONMENT }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Branch, tag or commit to deploy
+        required: true
+        default: main
+        type: string
+
+      target_environment:
+        description: Target environment name, URL or ID. Leave blank to use the repository variable.
+        required: false
+        default: ""
+        type: string
+
+      solution_package_type:
+        description: Package type to deploy
+        required: true
+        default: Unmanaged
+        type: choice
+        options:
+          - Unmanaged
+          - Managed
+
+      publish_changes:
+        description: Publish changes after successful import
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    uses: >-
+      KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/deploy-solution.yml@main
+
+    with:
+      project_key: ${{ vars.PP_PROJECT_KEY }}
+      source_ref: ${{ inputs.source_ref }}
+
+      solution_name: ${{ vars.PP_SOLUTION_NAME }}
+      solution_source_folder: ${{ vars.PP_SOLUTION_SOURCE_FOLDER }}
+      solution_package_type: ${{ inputs.solution_package_type }}
+
+      target_environment: >-
+        ${{ inputs.target_environment ||
+        vars.PP_DEFAULT_DEPLOYMENT_ENVIRONMENT }}
+
+      deployment_settings_file: >-
+        ${{ vars.PP_DEPLOYMENT_SETTINGS_FILE || '' }}
+
+      force_overwrite: true
+      publish_changes: ${{ inputs.publish_changes }}
+      asynchronous_import: false
+      max_async_wait_minutes: 60
+
+      upload_solution_artifact: true
+      artifact_retention_days: 14
+
+    secrets:
+      pp_tenant_id: ${{ secrets.PP_TENANT_ID }}
+      pp_app_id: ${{ secrets.PP_APP_ID }}
+      pp_client_secret: ${{ secrets.PP_CLIENT_SECRET }}

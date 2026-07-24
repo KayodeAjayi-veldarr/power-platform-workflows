@@ -1,0 +1,153 @@
+name: Validate Power Platform Pull Request
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Branch or commit to validate. Leave blank to use the selected workflow branch.
+        required: false
+        default: ""
+        type: string
+
+      validation_environment_type:
+        description: Temporary environment type
+        required: true
+        default: Sandbox
+        type: choice
+        options:
+          - Sandbox
+          - Trial
+
+      validation_environment_region:
+        description: Region. Leave blank to use the repository variable.
+        required: false
+        default: ""
+        type: string
+
+      validation_environment_currency:
+        description: Currency code. Leave blank to use the repository variable.
+        required: false
+        default: ""
+        type: string
+
+      validation_environment_language:
+        description: Language. Leave blank to use the repository variable.
+        required: false
+        default: ""
+        type: string
+
+      retain_validation_environment_on_failure:
+        description: Keep the temporary environment when validation fails
+        required: true
+        default: false
+        type: boolean
+
+      run_solution_checker:
+        description: Run Power Apps Solution Checker
+        required: true
+        default: true
+        type: boolean
+
+      checker_fail_on_errors:
+        description: Fail when Solution Checker returns error-level findings
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: >-
+      KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/validate-pull-request.yml@main
+
+    with:
+      project_key: ${{ vars.PP_PROJECT_KEY }}
+
+      source_ref: >-
+        ${{ github.event.pull_request.head.sha ||
+        inputs.source_ref ||
+        github.ref_name }}
+
+      pull_request_number: >-
+        ${{ github.event.pull_request.number || 0 }}
+
+      solution_name: ${{ vars.PP_SOLUTION_NAME }}
+      solution_source_folder: ${{ vars.PP_SOLUTION_SOURCE_FOLDER }}
+      solution_package_type: Unmanaged
+
+      deployment_settings_file: >-
+        ${{ vars.PP_DEPLOYMENT_SETTINGS_FILE || '' }}
+
+      run_solution_checker: >-
+        ${{ github.event_name != 'workflow_dispatch' ||
+        inputs.run_solution_checker }}
+
+      checker_geo: ${{ vars.PP_CHECKER_GEO }}
+      checker_rule_set: >-
+        ${{ vars.PP_CHECKER_RULE_SET || 'Solution Checker' }}
+
+      checker_fail_on_errors: >-
+        ${{ github.event_name == 'workflow_dispatch' &&
+        inputs.checker_fail_on_errors || false }}
+
+      create_temporary_validation_environment: true
+      delete_validation_environment_after_validation: true
+
+      retain_validation_environment_on_failure: >-
+        ${{ github.event_name == 'workflow_dispatch' &&
+        inputs.retain_validation_environment_on_failure || false }}
+
+      validation_environment_name_prefix: >-
+        ${{ vars.PP_VALIDATION_ENVIRONMENT_PREFIX ||
+        vars.PP_PROJECT_KEY }}
+
+      validation_environment_type: >-
+        ${{ github.event_name == 'workflow_dispatch' &&
+        inputs.validation_environment_type ||
+        vars.PP_VALIDATION_ENVIRONMENT_TYPE ||
+        'Sandbox' }}
+
+      validation_environment_region: >-
+        ${{ inputs.validation_environment_region ||
+        vars.PP_TARGET_REGION }}
+
+      validation_environment_currency: >-
+        ${{ inputs.validation_environment_currency ||
+        vars.PP_TARGET_CURRENCY }}
+
+      validation_environment_language: >-
+        ${{ inputs.validation_environment_language ||
+        vars.PP_TARGET_LANGUAGE }}
+
+      validation_environment_templates: >-
+        ${{ vars.PP_VALIDATION_TEMPLATES || '' }}
+
+      validation_environment_security_group_id: >-
+        ${{ vars.PP_VALIDATION_SECURITY_GROUP_ID || '' }}
+
+      environment_create_async: true
+      force_overwrite: true
+      publish_changes: true
+      asynchronous_import: false
+
+      max_async_wait_minutes: 60
+      environment_lookup_attempts: 20
+      environment_lookup_delay_seconds: 30
+
+      upload_validation_artifacts: true
+      artifact_retention_days: 14
+
+    secrets:
+      pp_tenant_id: ${{ secrets.PP_TENANT_ID }}
+      pp_app_id: ${{ secrets.PP_APP_ID }}
+      pp_client_secret: ${{ secrets.PP_CLIENT_SECRET }}

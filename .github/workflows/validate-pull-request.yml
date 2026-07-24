@@ -4,149 +4,213 @@ on:
   workflow_call:
     inputs:
       project_key:
+        description: Short project identifier used for temporary environment naming
         required: true
         type: string
+
       source_ref:
-        description: Commit SHA or branch to validate
+        description: Commit SHA or branch containing the solution source to validate
         required: true
         type: string
+
       pull_request_number:
+        description: Pull request number used in the temporary environment name
         required: false
         default: 0
         type: number
 
       solution_name:
+        description: Power Platform solution unique name
         required: true
         type: string
+
       solution_source_folder:
+        description: Folder containing the unpacked solution source
         required: true
         type: string
+
       solution_package_type:
+        description: Unmanaged or Managed
         required: false
         default: Unmanaged
         type: string
+
       deployment_settings_file:
+        description: Optional deployment settings JSON path
         required: false
         default: ""
         type: string
 
       run_solution_checker:
+        description: Run Power Apps Solution Checker against the packed ZIP
         required: false
         default: true
         type: boolean
+
       checker_environment:
-        description: Environment URL or ID used to authenticate Solution Checker
+        description: Environment used for Solution Checker when temporary environment creation is disabled
         required: false
         default: ""
         type: string
+
       checker_geo:
+        description: Power Apps Checker geography
         required: false
         default: UnitedKingdom
         type: string
+
       checker_rule_set:
+        description: Power Apps Checker rule set
         required: false
         default: Solution Checker
         type: string
+
       checker_rule_level_override_file:
+        description: Optional rule-level override JSON path
         required: false
         default: ""
         type: string
+
       checker_excluded_files:
+        description: Optional comma-separated files excluded from Solution Checker
         required: false
         default: ""
         type: string
+
       checker_save_results:
-        required: false
-        default: false
-        type: boolean
-      checker_fail_on_errors:
-        description: Fail when SARIF error-level findings are present
+        description: Save Solution Checker results into the selected environment
         required: false
         default: false
         type: boolean
 
-      deploy_to_validation_environment:
+      checker_fail_on_errors:
+        description: Fail validation when SARIF error-level findings are present
         required: false
         default: false
         type: boolean
-      validation_environment:
-        description: Existing validation environment URL or ID
+
+      create_temporary_validation_environment:
+        description: Create a clean environment and import the exact packed ZIP
+        required: false
+        default: true
+        type: boolean
+
+      delete_validation_environment_after_validation:
+        description: Delete the temporary environment after validation
+        required: false
+        default: true
+        type: boolean
+
+      retain_validation_environment_on_failure:
+        description: Keep the temporary environment when import or checker validation fails
+        required: false
+        default: false
+        type: boolean
+
+      validation_environment_name_prefix:
+        description: Prefix for the generated temporary environment name
         required: false
         default: ""
         type: string
-      validation_environment_name:
-        description: Exact name used when creating or finding validation environment
+
+      validation_environment_domain_prefix:
+        description: Optional prefix for the generated Dataverse domain
         required: false
         default: ""
         type: string
-      validation_environment_domain:
-        required: false
-        default: ""
-        type: string
-      validation_environment_mode:
-        description: ReuseOrCreate or ExistingOnly
-        required: false
-        default: ReuseOrCreate
-        type: string
+
       validation_environment_type:
+        description: Sandbox, Trial, SubscriptionBasedTrial or Developer
         required: false
         default: Sandbox
         type: string
+
+      validation_environment_owner_upn:
+        description: Required only when validation_environment_type is Developer
+        required: false
+        default: ""
+        type: string
+
       validation_environment_region:
+        description: Power Platform region
         required: false
         default: europe
         type: string
+
       validation_environment_currency:
+        description: Dataverse currency code
         required: false
         default: GBP
         type: string
+
       validation_environment_language:
+        description: Environment language
         required: false
         default: English
         type: string
+
       validation_environment_templates:
+        description: Optional comma-separated Dynamics 365 templates
         required: false
         default: ""
         type: string
+
       validation_environment_security_group_id:
+        description: Optional Microsoft Entra security group ID
         required: false
         default: ""
         type: string
+
       environment_create_async:
+        description: Create the temporary environment asynchronously
         required: false
         default: true
         type: boolean
 
       force_overwrite:
+        description: Force overwrite unmanaged customisations during import
         required: false
         default: true
         type: boolean
+
       publish_changes:
+        description: Publish changes after successful import
         required: false
         default: true
         type: boolean
+
       asynchronous_import:
+        description: Import the solution asynchronously
         required: false
         default: false
         type: boolean
 
       max_async_wait_minutes:
+        description: Maximum PAC wait time in minutes
         required: false
         default: 60
         type: number
+
       environment_lookup_attempts:
+        description: Number of attempts used to retrieve the temporary environment
         required: false
         default: 20
         type: number
+
       environment_lookup_delay_seconds:
+        description: Delay between environment lookup attempts
         required: false
         default: 30
         type: number
+
       upload_validation_artifacts:
+        description: Upload the exact solution ZIP and validation logs
         required: false
         default: true
         type: boolean
+
       artifact_retention_days:
+        description: Number of days to keep validation artifacts
         required: false
         default: 14
         type: number
@@ -154,42 +218,55 @@ on:
     secrets:
       pp_tenant_id:
         required: true
+
       pp_app_id:
         required: true
+
       pp_client_secret:
         required: true
 
     outputs:
       validation_passed:
         value: ${{ jobs.validate.outputs.validation_passed }}
+
       pack_status:
         value: ${{ jobs.validate.outputs.pack_status }}
+
+      import_status:
+        value: ${{ jobs.validate.outputs.import_status }}
+
       checker_status:
         value: ${{ jobs.validate.outputs.checker_status }}
+
       checker_issue_count:
         value: ${{ jobs.validate.outputs.checker_issue_count }}
+
       checker_error_count:
         value: ${{ jobs.validate.outputs.checker_error_count }}
+
       checker_warning_count:
         value: ${{ jobs.validate.outputs.checker_warning_count }}
-      checker_results_artifact_name:
-        value: ${{ jobs.validate.outputs.checker_results_artifact_name }}
-      deployment_status:
-        value: ${{ jobs.validate.outputs.deployment_status }}
-      validation_environment_action:
-        value: ${{ jobs.validate.outputs.validation_environment_action }}
+
       validation_environment_id:
         value: ${{ jobs.validate.outputs.validation_environment_id }}
+
       validation_environment_name:
         value: ${{ jobs.validate.outputs.validation_environment_name }}
+
       validation_environment_url:
         value: ${{ jobs.validate.outputs.validation_environment_url }}
-      validation_solution_url:
-        value: ${{ jobs.validate.outputs.validation_solution_url }}
-      deployment_url:
-        value: ${{ jobs.validate.outputs.deployment_url }}
-      solution_zip_artifact_name:
-        value: ${{ jobs.validate.outputs.solution_zip_artifact_name }}
+
+      validation_environment_deleted:
+        value: ${{ jobs.validate.outputs.validation_environment_deleted }}
+
+      validation_environment_retained:
+        value: ${{ jobs.validate.outputs.validation_environment_retained }}
+
+      cleanup_status:
+        value: ${{ jobs.validate.outputs.cleanup_status }}
+
+      solution_artifact_name:
+        value: ${{ jobs.validate.outputs.solution_artifact_name }}
 
 permissions:
   contents: read
@@ -198,27 +275,32 @@ jobs:
   validate:
     name: Validate Power Platform solution
     runs-on: windows-latest
-    timeout-minutes: 150
+    timeout-minutes: 180
+
+    concurrency:
+      group: >-
+        power-platform-validation-${{ github.repository }}-${{
+        inputs.pull_request_number }}-${{ inputs.source_ref }}
+      cancel-in-progress: false
 
     outputs:
-      validation_passed: ${{ steps.result.outputs.validation_passed }}
+      validation_passed: ${{ steps.final_result.outputs.validation_passed }}
       pack_status: ${{ steps.pack.outputs.pack_status }}
-      checker_status: ${{ steps.checker_results.outputs.checker_status }}
-      checker_issue_count: ${{ steps.checker_results.outputs.issue_count }}
-      checker_error_count: ${{ steps.checker_results.outputs.error_count }}
-      checker_warning_count: ${{ steps.checker_results.outputs.warning_count }}
-      checker_results_artifact_name: ${{ steps.artifact_names.outputs.checker_artifact_name }}
-      deployment_status: ${{ steps.deployment_result.outputs.deployment_status }}
-      validation_environment_action: ${{ steps.environment_details.outputs.environment_action }}
+      import_status: ${{ steps.import_solution.outputs.import_status }}
+      checker_status: ${{ steps.checker_result.outputs.checker_status }}
+      checker_issue_count: ${{ steps.checker_result.outputs.issue_count }}
+      checker_error_count: ${{ steps.checker_result.outputs.error_count }}
+      checker_warning_count: ${{ steps.checker_result.outputs.warning_count }}
       validation_environment_id: ${{ steps.environment_details.outputs.environment_id }}
-      validation_environment_name: ${{ steps.environment_details.outputs.environment_name }}
+      validation_environment_name: ${{ steps.setup.outputs.environment_name }}
       validation_environment_url: ${{ steps.environment_details.outputs.environment_url }}
-      validation_solution_url: ${{ steps.links.outputs.solution_url }}
-      deployment_url: ${{ steps.links.outputs.deployment_url }}
-      solution_zip_artifact_name: ${{ steps.artifact_names.outputs.solution_artifact_name }}
+      validation_environment_deleted: ${{ steps.cleanup_result.outputs.environment_deleted }}
+      validation_environment_retained: ${{ steps.cleanup_result.outputs.environment_retained }}
+      cleanup_status: ${{ steps.cleanup_result.outputs.cleanup_status }}
+      solution_artifact_name: ${{ steps.artifact_names.outputs.solution_artifact_name }}
 
     steps:
-      - name: Check out pull request source
+      - name: Check out validation source
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
@@ -230,21 +312,29 @@ jobs:
         with:
           add-tools-to-path: "true"
 
-      - name: Validate inputs
+      - name: Validate workflow inputs
         shell: pwsh
         env:
           SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
           PACKAGE_TYPE: ${{ inputs.solution_package_type }}
+          CREATE_TEMPORARY_ENVIRONMENT: ${{ inputs.create_temporary_validation_environment }}
+          VALIDATION_TYPE: ${{ inputs.validation_environment_type }}
+          VALIDATION_OWNER_UPN: ${{ inputs.validation_environment_owner_upn }}
           RUN_CHECKER: ${{ inputs.run_solution_checker }}
           CHECKER_ENVIRONMENT: ${{ inputs.checker_environment }}
-          DEPLOY: ${{ inputs.deploy_to_validation_environment }}
-          VALIDATION_ENVIRONMENT: ${{ inputs.validation_environment }}
-          VALIDATION_NAME: ${{ inputs.validation_environment_name }}
-          VALIDATION_MODE: ${{ inputs.validation_environment_mode }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+          LOOKUP_ATTEMPTS: ${{ inputs.environment_lookup_attempts }}
+          LOOKUP_DELAY: ${{ inputs.environment_lookup_delay_seconds }}
         run: |
           $ErrorActionPreference = "Stop"
 
-          if (-not (Test-Path -LiteralPath $env:SOLUTION_SOURCE_FOLDER -PathType Container)) {
+          if (
+            -not (
+              Test-Path `
+                -LiteralPath $env:SOLUTION_SOURCE_FOLDER `
+                -PathType Container
+            )
+          ) {
             throw "solution_source_folder was not found: $env:SOLUTION_SOURCE_FOLDER"
           }
 
@@ -252,65 +342,256 @@ jobs:
             throw "solution_package_type must be Unmanaged or Managed."
           }
 
-          if (@("ReuseOrCreate", "ExistingOnly") -notcontains $env:VALIDATION_MODE) {
-            throw "validation_environment_mode must be ReuseOrCreate or ExistingOnly."
+          $allowedTypes = @(
+            "Sandbox",
+            "Trial",
+            "SubscriptionBasedTrial",
+            "Developer"
+          )
+
+          if (
+            $env:CREATE_TEMPORARY_ENVIRONMENT -eq "true" -and
+            $allowedTypes -notcontains $env:VALIDATION_TYPE
+          ) {
+            throw "Unsupported validation_environment_type: $env:VALIDATION_TYPE"
           }
 
-          if ($env:RUN_CHECKER -eq "true" -and
-              [string]::IsNullOrWhiteSpace($env:CHECKER_ENVIRONMENT) -and
-              $env:DEPLOY -ne "true") {
-            throw "checker_environment is required when Solution Checker runs without validation deployment."
+          if (
+            $env:CREATE_TEMPORARY_ENVIRONMENT -eq "true" -and
+            $env:VALIDATION_TYPE -eq "Developer" -and
+            [string]::IsNullOrWhiteSpace($env:VALIDATION_OWNER_UPN)
+          ) {
+            throw @"
+          validation_environment_owner_upn is required when the temporary
+          validation environment type is Developer.
+          "@
           }
 
-          if ($env:DEPLOY -eq "true" -and
-              [string]::IsNullOrWhiteSpace($env:VALIDATION_ENVIRONMENT) -and
-              [string]::IsNullOrWhiteSpace($env:VALIDATION_NAME)) {
-            throw "Provide validation_environment or validation_environment_name when deployment is enabled."
+          if (
+            $env:CREATE_TEMPORARY_ENVIRONMENT -ne "true" -and
+            $env:RUN_CHECKER -eq "true" -and
+            [string]::IsNullOrWhiteSpace($env:CHECKER_ENVIRONMENT)
+          ) {
+            throw @"
+          checker_environment is required when temporary environment creation
+          is disabled and Solution Checker is enabled.
+          "@
           }
 
-      - name: Prepare artifact folders
-        id: folders
+          foreach ($value in @(
+            @{
+              Name = "max_async_wait_minutes"
+              Value = $env:MAX_WAIT
+            },
+            @{
+              Name = "environment_lookup_attempts"
+              Value = $env:LOOKUP_ATTEMPTS
+            },
+            @{
+              Name = "environment_lookup_delay_seconds"
+              Value = $env:LOOKUP_DELAY
+            }
+          )) {
+            $number = 0
+            if (
+              -not [int]::TryParse(
+                [string]$value.Value,
+                [ref]$number
+              ) -or
+              $number -lt 1
+            ) {
+              throw "$($value.Name) must be greater than zero."
+            }
+          }
+
+      - name: Prepare validation names and folders
+        id: setup
         shell: pwsh
+        env:
+          PROJECT_KEY: ${{ inputs.project_key }}
+          REQUESTED_NAME_PREFIX: ${{ inputs.validation_environment_name_prefix }}
+          REQUESTED_DOMAIN_PREFIX: ${{ inputs.validation_environment_domain_prefix }}
+          PULL_REQUEST_NUMBER: ${{ inputs.pull_request_number }}
         run: |
-          $root = Join-Path $env:RUNNER_TEMP "power-platform-pr-validation"
-          $checker = Join-Path $root "checker"
-          New-Item -ItemType Directory -Path $root -Force | Out-Null
-          New-Item -ItemType Directory -Path $checker -Force | Out-Null
+          $ErrorActionPreference = "Stop"
 
-          "root=$root" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "checker=$checker" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          function Convert-ToSafeName {
+            param(
+              [Parameter(Mandatory)]
+              [string]$Value
+            )
 
-      - name: Pack solution
+            $result = $Value.ToUpperInvariant()
+            $result = $result -replace '[^A-Z0-9-]', '-'
+            $result = $result -replace '-+', '-'
+            return $result.Trim('-')
+          }
+
+          function Convert-ToSafeDomain {
+            param(
+              [Parameter(Mandatory)]
+              [string]$Value
+            )
+
+            $result = $Value.ToLowerInvariant()
+            $result = $result -replace '[^a-z0-9-]', '-'
+            $result = $result -replace '-+', '-'
+            return $result.Trim('-')
+          }
+
+          $namePrefix = if (
+            [string]::IsNullOrWhiteSpace(
+              $env:REQUESTED_NAME_PREFIX
+            )
+          ) {
+            Convert-ToSafeName -Value $env:PROJECT_KEY
+          }
+          else {
+            Convert-ToSafeName -Value $env:REQUESTED_NAME_PREFIX
+          }
+
+          $referenceNumber = if (
+            [int]$env:PULL_REQUEST_NUMBER -gt 0
+          ) {
+            "PR-$($env:PULL_REQUEST_NUMBER)"
+          }
+          else {
+            "RUN-${{ github.run_number }}"
+          }
+
+          $runId = [string]"${{ github.run_id }}"
+          $runSuffix = if ($runId.Length -gt 6) {
+            $runId.Substring($runId.Length - 6)
+          }
+          else {
+            $runId
+          }
+
+          $environmentName = (
+            "$namePrefix-$referenceNumber-VAL-$runSuffix"
+          )
+
+          if ($environmentName.Length -gt 90) {
+            $environmentName = $environmentName.Substring(0, 90)
+            $environmentName = $environmentName.Trim('-')
+          }
+
+          $domainPrefix = if (
+            [string]::IsNullOrWhiteSpace(
+              $env:REQUESTED_DOMAIN_PREFIX
+            )
+          ) {
+            Convert-ToSafeDomain -Value $environmentName
+          }
+          else {
+            Convert-ToSafeDomain -Value (
+              "$($env:REQUESTED_DOMAIN_PREFIX)-" +
+              "$referenceNumber-val-$runSuffix"
+            )
+          }
+
+          if ($domainPrefix.Length -gt 45) {
+            $domainPrefix = $domainPrefix.Substring(0, 45)
+            $domainPrefix = $domainPrefix.Trim('-')
+          }
+
+          if ([string]::IsNullOrWhiteSpace($environmentName)) {
+            throw "A validation environment name could not be generated."
+          }
+
+          if ([string]::IsNullOrWhiteSpace($domainPrefix)) {
+            throw "A validation environment domain could not be generated."
+          }
+
+          $artifactRoot = Join-Path `
+            $env:RUNNER_TEMP `
+            "power-platform-pr-validation"
+
+          $checkerFolder = Join-Path `
+            $artifactRoot `
+            "checker"
+
+          New-Item `
+            -ItemType Directory `
+            -Path $artifactRoot `
+            -Force |
+            Out-Null
+
+          New-Item `
+            -ItemType Directory `
+            -Path $checkerFolder `
+            -Force |
+            Out-Null
+
+          $purpose = (
+            "Temporary validation; " +
+            "Repository=${{ github.repository }}; " +
+            "Project=$($env:PROJECT_KEY); " +
+            "PR=$($env:PULL_REQUEST_NUMBER); " +
+            "Run=${{ github.run_id }}"
+          )
+
+          "environment_name=$environmentName" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "environment_domain=$domainPrefix" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "environment_purpose=$purpose" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "artifact_root=$artifactRoot" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "checker_folder=$checkerFolder" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Pack exact solution package
         id: pack
         shell: pwsh
         env:
           SOLUTION_NAME: ${{ inputs.solution_name }}
           SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
           PACKAGE_TYPE: ${{ inputs.solution_package_type }}
-          ARTIFACT_ROOT: ${{ steps.folders.outputs.root }}
+          ARTIFACT_ROOT: ${{ steps.setup.outputs.artifact_root }}
         run: |
           $ErrorActionPreference = "Stop"
 
-          $zip = Join-Path $env:ARTIFACT_ROOT "$($env:SOLUTION_NAME)-validation.zip"
-          $log = Join-Path $env:ARTIFACT_ROOT "solution-pack.log"
+          $solutionZip = Join-Path `
+            $env:ARTIFACT_ROOT `
+            "$($env:SOLUTION_NAME)-validation.zip"
+
+          $packLog = Join-Path `
+            $env:ARTIFACT_ROOT `
+            "solution-pack.log"
 
           & pac solution pack `
-            --zipfile "$zip" `
+            --zipfile "$solutionZip" `
             --folder "$env:SOLUTION_SOURCE_FOLDER" `
             --packagetype "$env:PACKAGE_TYPE" `
             --errorlevel Verbose `
-            --log "$log"
+            --log "$packLog"
 
           if ($LASTEXITCODE -ne 0) {
-            "pack_status=Failed" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            throw "The pull request solution could not be packed."
+            "pack_status=Failed" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            throw "The solution could not be packed."
           }
 
-          "solution_zip=$zip" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "pack_status=Succeeded" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "solution_zip=$solutionZip" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      - name: Authenticate for tenant administration
-        if: inputs.deploy_to_validation_environment
+          "pack_log=$packLog" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "pack_status=Succeeded" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Authenticate for temporary environment administration
+        id: admin_auth
+        if: inputs.create_temporary_validation_environment
+        continue-on-error: true
         shell: pwsh
         env:
           PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
@@ -326,33 +607,45 @@ jobs:
             --tenant "$env:PP_TENANT_ID"
 
           if ($LASTEXITCODE -ne 0) {
-            throw "Validation tenant administration authentication failed."
+            throw "Temporary environment administration authentication failed."
           }
 
-      - name: Find existing validation environment
-        id: find_environment
-        if: inputs.deploy_to_validation_environment
+      - name: Confirm temporary environment name is unused
+        id: name_available
+        if: >-
+          ${{
+            inputs.create_temporary_validation_environment &&
+            steps.admin_auth.outcome == 'success'
+          }}
+        continue-on-error: true
         shell: pwsh
         env:
-          REQUESTED_ENVIRONMENT: ${{ inputs.validation_environment }}
-          REQUESTED_NAME: ${{ inputs.validation_environment_name }}
+          ENVIRONMENT_NAME: ${{ steps.setup.outputs.environment_name }}
         run: |
           $ErrorActionPreference = "Stop"
 
-          function Get-Value($Object, [string[]]$Names) {
+          function Get-PropertyValue {
+            param(
+              [AllowNull()]
+              [object]$Object,
+
+              [Parameter(Mandatory)]
+              [string[]]$Names
+            )
+
             if ($null -eq $Object) {
               return ""
             }
 
-            $properties = $Object.PSObject.Properties
-            if ($null -eq $properties) {
-              return ""
-            }
-
             foreach ($name in $Names) {
-              $property = $properties[$name]
-              if ($null -ne $property -and
-                  -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+              $property = $Object.PSObject.Properties[$name]
+
+              if (
+                $null -ne $property -and
+                -not [string]::IsNullOrWhiteSpace(
+                  [string]$property.Value
+                )
+              ) {
                 return [string]$property.Value
               }
             }
@@ -360,101 +653,70 @@ jobs:
             return ""
           }
 
-          function Normalize-Url([string]$Value) {
-            return $Value.Trim().TrimEnd('/').ToLowerInvariant()
-          }
+          $raw = & pac admin list `
+            --name "$env:ENVIRONMENT_NAME" `
+            --json
 
-          $query = if (-not [string]::IsNullOrWhiteSpace($env:REQUESTED_ENVIRONMENT)) {
-            $env:REQUESTED_ENVIRONMENT
-          }
-          else {
-            $env:REQUESTED_NAME
-          }
-
-          $raw = & pac admin list --environment "$query" --json
           if ($LASTEXITCODE -ne 0) {
-            throw "Unable to list validation environments."
+            throw "Unable to check whether the temporary environment exists."
           }
 
-          $text = $raw -join "`n"
-          $items = @()
-          if (-not [string]::IsNullOrWhiteSpace($text)) {
-            $parsed = $text | ConvertFrom-Json
-            $items = if ($null -ne $parsed.value) { @($parsed.value) } else { @($parsed) }
-          }
+          $jsonText = $raw -join "`n"
 
-          $match = $null
-          foreach ($item in $items) {
-            $name = Get-Value $item @("Environment", "DisplayName", "EnvironmentName", "FriendlyName", "Name")
-            $id = Get-Value $item @("Environment Id", "EnvironmentId", "Id")
-            $url = Get-Value $item @("Environment Url", "EnvironmentUrl", "Url")
-
-            $matchesRequested = -not [string]::IsNullOrWhiteSpace($env:REQUESTED_ENVIRONMENT) -and (
-              $id -ceq $env:REQUESTED_ENVIRONMENT -or
-              (Normalize-Url $url) -eq (Normalize-Url $env:REQUESTED_ENVIRONMENT)
-            )
-            $matchesName = -not [string]::IsNullOrWhiteSpace($env:REQUESTED_NAME) -and
-              $name -ceq $env:REQUESTED_NAME
-
-            if ($matchesRequested -or $matchesName) {
-              $match = $item
-              break
-            }
-          }
-
-          if ($null -eq $match) {
-            "exists=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          if ([string]::IsNullOrWhiteSpace($jsonText)) {
             exit 0
           }
 
-          "exists=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "environment_id=$(Get-Value $match @('Environment Id','EnvironmentId','Id'))" |
-            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "environment_name=$(Get-Value $match @('Environment','DisplayName','EnvironmentName','FriendlyName','Name'))" |
-            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "environment_url=$(Get-Value $match @('Environment Url','EnvironmentUrl','Url'))" |
-            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          $parsed = $jsonText | ConvertFrom-Json
 
-      - name: Block missing ExistingOnly validation environment
-        if: inputs.deploy_to_validation_environment && steps.find_environment.outputs.exists == 'false' && inputs.validation_environment_mode == 'ExistingOnly'
-        shell: pwsh
-        run: |
-          throw "The validation environment does not exist and validation_environment_mode is ExistingOnly."
-
-      - name: Generate validation environment domain
-        id: validation_domain
-        if: inputs.deploy_to_validation_environment && steps.find_environment.outputs.exists == 'false'
-        shell: pwsh
-        env:
-          REQUESTED_DOMAIN: ${{ inputs.validation_environment_domain }}
-          VALIDATION_NAME: ${{ inputs.validation_environment_name }}
-        run: |
-          function Convert-ToSafeDomain([string]$Value) {
-            $result = $Value.ToLowerInvariant() -replace '[^a-z0-9-]', '-'
-            $result = $result -replace '-+', '-'
-            return $result.Trim('-')
-          }
-
-          $domain = if ([string]::IsNullOrWhiteSpace($env:REQUESTED_DOMAIN)) {
-            Convert-ToSafeDomain $env:VALIDATION_NAME
+          $items = if (
+            $null -ne $parsed.PSObject.Properties["value"]
+          ) {
+            @($parsed.value)
           }
           else {
-            Convert-ToSafeDomain $env:REQUESTED_DOMAIN
+            @($parsed)
           }
 
-          if ([string]::IsNullOrWhiteSpace($domain)) {
-            throw "A validation environment domain could not be generated."
+          foreach ($item in @($items | Where-Object { $null -ne $_ })) {
+            $name = Get-PropertyValue `
+              -Object $item `
+              -Names @(
+                "Environment",
+                "DisplayName",
+                "EnvironmentName",
+                "FriendlyName",
+                "Name"
+              )
+
+            if ($name -ceq $env:ENVIRONMENT_NAME) {
+              throw @"
+          A Power Platform environment already exists with the generated name:
+
+          $env:ENVIRONMENT_NAME
+
+          The workflow will not reuse or delete an environment that it did not
+          create during this run.
+          "@
+            }
           }
 
-          "domain=$domain" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
-      - name: Create validation environment
-        if: inputs.deploy_to_validation_environment && steps.find_environment.outputs.exists == 'false'
+      - name: Create temporary validation environment
+        id: create_environment
+        if: >-
+          ${{
+            inputs.create_temporary_validation_environment &&
+            steps.admin_auth.outcome == 'success' &&
+            steps.name_available.outcome == 'success'
+          }}
+        continue-on-error: true
         shell: pwsh
         env:
-          NAME: ${{ inputs.validation_environment_name }}
-          DOMAIN: ${{ steps.validation_domain.outputs.domain }}
-          TYPE: ${{ inputs.validation_environment_type }}
+          ENVIRONMENT_NAME: ${{ steps.setup.outputs.environment_name }}
+          ENVIRONMENT_DOMAIN: ${{ steps.setup.outputs.environment_domain }}
+          ENVIRONMENT_PURPOSE: ${{ steps.setup.outputs.environment_purpose }}
+          ENVIRONMENT_TYPE: ${{ inputs.validation_environment_type }}
+          ENVIRONMENT_OWNER_UPN: ${{ inputs.validation_environment_owner_upn }}
           REGION: ${{ inputs.validation_environment_region }}
           CURRENCY: ${{ inputs.validation_environment_currency }}
           LANGUAGE: ${{ inputs.validation_environment_language }}
@@ -466,58 +728,110 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           $arguments = @(
-            "admin", "create",
-            "--name", $env:NAME,
-            "--domain", $env:DOMAIN,
-            "--type", $env:TYPE,
-            "--region", $env:REGION,
-            "--currency", $env:CURRENCY,
-            "--language", $env:LANGUAGE,
-            "--max-async-wait-time", $env:MAX_WAIT
+            "admin",
+            "create",
+            "--name",
+            $env:ENVIRONMENT_NAME,
+            "--domain",
+            $env:ENVIRONMENT_DOMAIN,
+            "--purpose",
+            $env:ENVIRONMENT_PURPOSE,
+            "--type",
+            $env:ENVIRONMENT_TYPE,
+            "--region",
+            $env:REGION,
+            "--currency",
+            $env:CURRENCY,
+            "--language",
+            $env:LANGUAGE,
+            "--max-async-wait-time",
+            $env:MAX_WAIT
           )
 
+          if ($env:ENVIRONMENT_TYPE -eq "Developer") {
+            $arguments += @(
+              "--user",
+              $env:ENVIRONMENT_OWNER_UPN
+            )
+          }
+
           if (-not [string]::IsNullOrWhiteSpace($env:TEMPLATES)) {
-            $arguments += @("--templates", $env:TEMPLATES)
+            $arguments += @(
+              "--templates",
+              $env:TEMPLATES
+            )
           }
-          if (-not [string]::IsNullOrWhiteSpace($env:SECURITY_GROUP_ID)) {
-            $arguments += @("--security-group-id", $env:SECURITY_GROUP_ID)
+
+          if (
+            -not [string]::IsNullOrWhiteSpace(
+              $env:SECURITY_GROUP_ID
+            )
+          ) {
+            $arguments += @(
+              "--security-group-id",
+              $env:SECURITY_GROUP_ID
+            )
           }
+
           if ($env:CREATE_ASYNC -eq "true") {
             $arguments += "--async"
           }
 
-          & pac @arguments
-          if ($LASTEXITCODE -ne 0) {
-            throw "Validation environment creation failed."
+          $createLog = Join-Path `
+            "${{ steps.setup.outputs.artifact_root }}" `
+            "environment-create.log"
+
+          $output = & pac @arguments 2>&1
+          $exitCode = $LASTEXITCODE
+
+          $output |
+            Tee-Object `
+              -FilePath $createLog |
+            Write-Host
+
+          if ($exitCode -ne 0) {
+            throw "Temporary validation environment creation failed."
           }
 
-      - name: Retrieve validation environment details
+      - name: Retrieve temporary validation environment
         id: environment_details
-        if: inputs.deploy_to_validation_environment
+        if: >-
+          ${{
+            always() &&
+            inputs.create_temporary_validation_environment &&
+            steps.create_environment.outcome != 'skipped'
+          }}
+        continue-on-error: true
         shell: pwsh
         env:
-          REQUESTED_ENVIRONMENT: ${{ inputs.validation_environment }}
-          REQUESTED_NAME: ${{ inputs.validation_environment_name }}
-          EXISTED: ${{ steps.find_environment.outputs.exists }}
+          ENVIRONMENT_NAME: ${{ steps.setup.outputs.environment_name }}
           LOOKUP_ATTEMPTS: ${{ inputs.environment_lookup_attempts }}
           LOOKUP_DELAY: ${{ inputs.environment_lookup_delay_seconds }}
         run: |
           $ErrorActionPreference = "Stop"
 
-          function Get-Value($Object, [string[]]$Names) {
+          function Get-PropertyValue {
+            param(
+              [AllowNull()]
+              [object]$Object,
+
+              [Parameter(Mandatory)]
+              [string[]]$Names
+            )
+
             if ($null -eq $Object) {
               return ""
             }
 
-            $properties = $Object.PSObject.Properties
-            if ($null -eq $properties) {
-              return ""
-            }
-
             foreach ($name in $Names) {
-              $property = $properties[$name]
-              if ($null -ne $property -and
-                  -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+              $property = $Object.PSObject.Properties[$name]
+
+              if (
+                $null -ne $property -and
+                -not [string]::IsNullOrWhiteSpace(
+                  [string]$property.Value
+                )
+              ) {
                 return [string]$property.Value
               }
             }
@@ -525,52 +839,85 @@ jobs:
             return ""
           }
 
-          function Normalize-Url([string]$Value) {
-            return $Value.Trim().TrimEnd('/').ToLowerInvariant()
-          }
-
           $environmentId = ""
-          $environmentName = ""
           $environmentUrl = ""
 
-          for ($attempt = 1; $attempt -le [int]$env:LOOKUP_ATTEMPTS; $attempt++) {
-            $query = if (-not [string]::IsNullOrWhiteSpace($env:REQUESTED_ENVIRONMENT)) {
-              $env:REQUESTED_ENVIRONMENT
-            }
-            else {
-              $env:REQUESTED_NAME
-            }
+          for (
+            $attempt = 1;
+            $attempt -le [int]$env:LOOKUP_ATTEMPTS;
+            $attempt++
+          ) {
+            Write-Host @"
+          Temporary environment lookup attempt $attempt of
+          $env:LOOKUP_ATTEMPTS.
+          "@
 
-            $raw = & pac admin list --environment "$query" --json
+            $raw = & pac admin list `
+              --name "$env:ENVIRONMENT_NAME" `
+              --json
+
             if ($LASTEXITCODE -ne 0) {
-              throw "Unable to retrieve the validation environment."
+              throw "Unable to retrieve temporary environments."
             }
 
-            $parsed = ($raw -join "`n") | ConvertFrom-Json
-            $items = if ($null -ne $parsed.value) { @($parsed.value) } else { @($parsed) }
+            $jsonText = $raw -join "`n"
 
-            foreach ($item in $items) {
-              $name = Get-Value $item @("Environment", "DisplayName", "EnvironmentName", "FriendlyName", "Name")
-              $id = Get-Value $item @("Environment Id", "EnvironmentId", "Id")
-              $url = Get-Value $item @("Environment Url", "EnvironmentUrl", "Url")
+            if (-not [string]::IsNullOrWhiteSpace($jsonText)) {
+              $parsed = $jsonText | ConvertFrom-Json
 
-              $matchesRequested = -not [string]::IsNullOrWhiteSpace($env:REQUESTED_ENVIRONMENT) -and (
-                $id -ceq $env:REQUESTED_ENVIRONMENT -or
-                (Normalize-Url $url) -eq (Normalize-Url $env:REQUESTED_ENVIRONMENT)
-              )
-              $matchesName = -not [string]::IsNullOrWhiteSpace($env:REQUESTED_NAME) -and
-                $name -ceq $env:REQUESTED_NAME
+              $items = if (
+                $null -ne $parsed.PSObject.Properties["value"]
+              ) {
+                @($parsed.value)
+              }
+              else {
+                @($parsed)
+              }
 
-              if ($matchesRequested -or $matchesName) {
-                $environmentId = $id
-                $environmentName = $name
-                $environmentUrl = $url
+              foreach (
+                $item in @(
+                  $items |
+                    Where-Object { $null -ne $_ }
+                )
+              ) {
+                $name = Get-PropertyValue `
+                  -Object $item `
+                  -Names @(
+                    "Environment",
+                    "DisplayName",
+                    "EnvironmentName",
+                    "FriendlyName",
+                    "Name"
+                  )
+
+                if ($name -cne $env:ENVIRONMENT_NAME) {
+                  continue
+                }
+
+                $environmentId = Get-PropertyValue `
+                  -Object $item `
+                  -Names @(
+                    "Environment Id",
+                    "EnvironmentId",
+                    "Id"
+                  )
+
+                $environmentUrl = Get-PropertyValue `
+                  -Object $item `
+                  -Names @(
+                    "Environment Url",
+                    "EnvironmentUrl",
+                    "Url"
+                  )
+
                 break
               }
             }
 
-            if (-not [string]::IsNullOrWhiteSpace($environmentId) -and
-                -not [string]::IsNullOrWhiteSpace($environmentUrl)) {
+            if (
+              -not [string]::IsNullOrWhiteSpace($environmentId) -and
+              -not [string]::IsNullOrWhiteSpace($environmentUrl)
+            ) {
               break
             }
 
@@ -579,147 +926,27 @@ jobs:
             }
           }
 
-          if ([string]::IsNullOrWhiteSpace($environmentId)) {
-            throw "The validation environment could not be resolved."
+          if (
+            [string]::IsNullOrWhiteSpace($environmentId) -or
+            [string]::IsNullOrWhiteSpace($environmentUrl)
+          ) {
+            throw "The temporary validation environment could not be resolved."
           }
 
-          $action = if ($env:EXISTED -eq "true") { "Reused" } else { "Created" }
+          "environment_id=$environmentId" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-          "environment_action=$action" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "environment_id=$environmentId" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "environment_name=$environmentName" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "environment_url=$environmentUrl" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_url=$environmentUrl" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      - name: Authenticate for Solution Checker
-        if: inputs.run_solution_checker
-        id: checker_auth
-        shell: pwsh
-        env:
-          PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
-          PP_APP_ID: ${{ secrets.pp_app_id }}
-          PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
-          CHECKER_ENVIRONMENT: ${{ inputs.checker_environment }}
-          VALIDATION_ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $environment = $env:CHECKER_ENVIRONMENT
-          if ([string]::IsNullOrWhiteSpace($environment)) {
-            $environment = $env:VALIDATION_ENVIRONMENT_URL
-          }
-          if ([string]::IsNullOrWhiteSpace($environment)) {
-            throw "No environment is available for Solution Checker authentication."
-          }
-
-          pac auth create `
-            --name "pp-checker" `
-            --applicationId "$env:PP_APP_ID" `
-            --clientSecret "$env:PP_CLIENT_SECRET" `
-            --tenant "$env:PP_TENANT_ID" `
-            --environment "$environment"
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "Solution Checker authentication failed."
-          }
-
-          "environment=$environment" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
-      - name: Run Solution Checker
-        if: inputs.run_solution_checker
-        shell: pwsh
-        env:
-          SOLUTION_ZIP: ${{ steps.pack.outputs.solution_zip }}
-          CHECKER_OUTPUT: ${{ steps.folders.outputs.checker }}
-          CHECKER_ENVIRONMENT: ${{ steps.checker_auth.outputs.environment }}
-          CHECKER_GEO: ${{ inputs.checker_geo }}
-          CHECKER_RULE_SET: ${{ inputs.checker_rule_set }}
-          RULE_OVERRIDE_FILE: ${{ inputs.checker_rule_level_override_file }}
-          EXCLUDED_FILES: ${{ inputs.checker_excluded_files }}
-          SAVE_RESULTS: ${{ inputs.checker_save_results }}
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $arguments = @(
-            "solution", "check",
-            "--path", $env:SOLUTION_ZIP,
-            "--outputDirectory", $env:CHECKER_OUTPUT,
-            "--environment", $env:CHECKER_ENVIRONMENT,
-            "--geo", $env:CHECKER_GEO,
-            "--ruleSet", $env:CHECKER_RULE_SET
-          )
-
-          if (-not [string]::IsNullOrWhiteSpace($env:RULE_OVERRIDE_FILE)) {
-            if (-not (Test-Path -LiteralPath $env:RULE_OVERRIDE_FILE -PathType Leaf)) {
-              throw "checker_rule_level_override_file was not found."
-            }
-            $arguments += @("--ruleLevelOverride", $env:RULE_OVERRIDE_FILE)
-          }
-
-          if (-not [string]::IsNullOrWhiteSpace($env:EXCLUDED_FILES)) {
-            $arguments += @("--excludedFiles", $env:EXCLUDED_FILES)
-          }
-
-          if ($env:SAVE_RESULTS -eq "true") {
-            $arguments += "--saveResults"
-          }
-
-          & pac @arguments
-          if ($LASTEXITCODE -ne 0) {
-            throw "Solution Checker did not complete successfully."
-          }
-
-      - name: Read Solution Checker results
-        id: checker_results
-        shell: pwsh
-        env:
-          RUN_CHECKER: ${{ inputs.run_solution_checker }}
-          CHECKER_OUTPUT: ${{ steps.folders.outputs.checker }}
-          FAIL_ON_ERRORS: ${{ inputs.checker_fail_on_errors }}
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          if ($env:RUN_CHECKER -ne "true") {
-            "checker_status=Skipped" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            "issue_count=0" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            "error_count=0" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            "warning_count=0" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            exit 0
-          }
-
-          $issueCount = 0
-          $errorCount = 0
-          $warningCount = 0
-
-          $sarifFiles = Get-ChildItem -Path $env:CHECKER_OUTPUT -Filter *.sarif -Recurse -ErrorAction SilentlyContinue
-          foreach ($file in $sarifFiles) {
-            try {
-              $sarif = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
-              foreach ($run in @($sarif.runs)) {
-                foreach ($result in @($run.results)) {
-                  $issueCount++
-                  switch ([string]$result.level) {
-                    "error" { $errorCount++ }
-                    "warning" { $warningCount++ }
-                  }
-                }
-              }
-            }
-            catch {
-              Write-Warning "Could not parse SARIF file: $($file.FullName)"
-            }
-          }
-
-          "checker_status=Completed" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "issue_count=$issueCount" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "error_count=$errorCount" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "warning_count=$warningCount" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
-          if ($env:FAIL_ON_ERRORS -eq "true" -and $errorCount -gt 0) {
-            throw "Solution Checker returned $errorCount error-level findings."
-          }
-
-      - name: Authenticate to validation environment
-        if: inputs.deploy_to_validation_environment
+      - name: Authenticate to temporary validation environment
+        id: target_auth
+        if: >-
+          ${{
+            inputs.create_temporary_validation_environment &&
+            steps.environment_details.outputs.environment_url != ''
+          }}
+        continue-on-error: true
         shell: pwsh
         env:
           PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
@@ -737,12 +964,16 @@ jobs:
             --environment "$env:ENVIRONMENT_URL"
 
           if ($LASTEXITCODE -ne 0) {
-            throw "Authentication to the validation environment failed."
+            throw "Authentication to the temporary environment failed."
           }
 
-      - name: Deploy solution to validation environment
-        if: inputs.deploy_to_validation_environment
-        id: deploy
+      - name: Import exact packed ZIP into temporary environment
+        id: import_solution
+        if: >-
+          ${{
+            inputs.create_temporary_validation_environment &&
+            steps.target_auth.outcome == 'success'
+          }}
         shell: pwsh
         env:
           SOLUTION_ZIP: ${{ steps.pack.outputs.solution_zip }}
@@ -752,115 +983,787 @@ jobs:
           PUBLISH_CHANGES: ${{ inputs.publish_changes }}
           ASYNC_IMPORT: ${{ inputs.asynchronous_import }}
           MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+          ARTIFACT_ROOT: ${{ steps.setup.outputs.artifact_root }}
         run: |
           $ErrorActionPreference = "Stop"
 
+          $importLog = Join-Path `
+            $env:ARTIFACT_ROOT `
+            "solution-import.log"
+
           $arguments = @(
-            "solution", "import",
-            "--path", $env:SOLUTION_ZIP,
-            "--environment", $env:ENVIRONMENT_URL,
-            "--max-async-wait-time", $env:MAX_WAIT
+            "solution",
+            "import",
+            "--path",
+            $env:SOLUTION_ZIP,
+            "--environment",
+            $env:ENVIRONMENT_URL,
+            "--max-async-wait-time",
+            $env:MAX_WAIT
           )
 
-          if ($env:FORCE_OVERWRITE -eq "true") { $arguments += "--force-overwrite" }
-          if ($env:PUBLISH_CHANGES -eq "true") { $arguments += "--publish-changes" }
-          if ($env:ASYNC_IMPORT -eq "true") { $arguments += "--async" }
+          if ($env:FORCE_OVERWRITE -eq "true") {
+            $arguments += "--force-overwrite"
+          }
+
+          if ($env:PUBLISH_CHANGES -eq "true") {
+            $arguments += "--publish-changes"
+          }
+
+          if ($env:ASYNC_IMPORT -eq "true") {
+            $arguments += "--async"
+          }
 
           if (-not [string]::IsNullOrWhiteSpace($env:SETTINGS_FILE)) {
-            if (-not (Test-Path -LiteralPath $env:SETTINGS_FILE -PathType Leaf)) {
-              throw "deployment_settings_file was not found: $env:SETTINGS_FILE"
+            if (
+              -not (
+                Test-Path `
+                  -LiteralPath $env:SETTINGS_FILE `
+                  -PathType Leaf
+              )
+            ) {
+              @"
+          deployment_settings_file was not found:
+
+          $env:SETTINGS_FILE
+          "@ |
+                Tee-Object `
+                  -FilePath $importLog |
+                Write-Host
+
+              "import_status=Failed" |
+                Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+              exit 0
             }
-            $arguments += @("--settings-file", $env:SETTINGS_FILE)
+
+            $arguments += @(
+              "--settings-file",
+              $env:SETTINGS_FILE
+            )
           }
 
-          & pac @arguments
+          $output = & pac @arguments 2>&1
+          $exitCode = $LASTEXITCODE
+
+          $output |
+            Tee-Object `
+              -FilePath $importLog |
+            Write-Host
+
+          $status = if ($exitCode -eq 0) {
+            "Succeeded"
+          }
+          else {
+            "Failed"
+          }
+
+          "import_status=$status" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "import_log=$importLog" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Authenticate for checker-only validation
+        id: checker_only_auth
+        if: >-
+          ${{
+            !inputs.create_temporary_validation_environment &&
+            inputs.run_solution_checker
+          }}
+        continue-on-error: true
+        shell: pwsh
+        env:
+          PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          PP_APP_ID: ${{ secrets.pp_app_id }}
+          PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+          CHECKER_ENVIRONMENT: ${{ inputs.checker_environment }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          pac auth create `
+            --name "pp-checker" `
+            --applicationId "$env:PP_APP_ID" `
+            --clientSecret "$env:PP_CLIENT_SECRET" `
+            --tenant "$env:PP_TENANT_ID" `
+            --environment "$env:CHECKER_ENVIRONMENT"
+
           if ($LASTEXITCODE -ne 0) {
-            throw "Validation deployment failed."
+            throw "Solution Checker authentication failed."
           }
 
-      - name: Record deployment result
-        id: deployment_result
+      - name: Run Solution Checker
+        id: checker
+        if: >-
+          ${{
+            inputs.run_solution_checker &&
+            (
+              steps.target_auth.outcome == 'success' ||
+              steps.checker_only_auth.outcome == 'success'
+            )
+          }}
         shell: pwsh
         env:
-          DEPLOY: ${{ inputs.deploy_to_validation_environment }}
+          SOLUTION_ZIP: ${{ steps.pack.outputs.solution_zip }}
+          CHECKER_OUTPUT: ${{ steps.setup.outputs.checker_folder }}
+          CHECKER_ENVIRONMENT: >-
+            ${{ inputs.create_temporary_validation_environment &&
+            steps.environment_details.outputs.environment_url ||
+            inputs.checker_environment }}
+          CHECKER_GEO: ${{ inputs.checker_geo }}
+          CHECKER_RULE_SET: ${{ inputs.checker_rule_set }}
+          RULE_OVERRIDE_FILE: ${{ inputs.checker_rule_level_override_file }}
+          EXCLUDED_FILES: ${{ inputs.checker_excluded_files }}
+          SAVE_RESULTS: ${{ inputs.checker_save_results }}
+          ARTIFACT_ROOT: ${{ steps.setup.outputs.artifact_root }}
         run: |
-          $status = if ($env:DEPLOY -eq "true") { "Succeeded" } else { "Skipped" }
-          "deployment_status=$status" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          $ErrorActionPreference = "Stop"
 
-      - name: Build validation links
-        id: links
+          $checkerLog = Join-Path `
+            $env:ARTIFACT_ROOT `
+            "solution-checker.log"
+
+          $arguments = @(
+            "solution",
+            "check",
+            "--path",
+            $env:SOLUTION_ZIP,
+            "--outputDirectory",
+            $env:CHECKER_OUTPUT,
+            "--environment",
+            $env:CHECKER_ENVIRONMENT,
+            "--geo",
+            $env:CHECKER_GEO,
+            "--ruleSet",
+            $env:CHECKER_RULE_SET
+          )
+
+          if (-not [string]::IsNullOrWhiteSpace($env:RULE_OVERRIDE_FILE)) {
+            if (
+              -not (
+                Test-Path `
+                  -LiteralPath $env:RULE_OVERRIDE_FILE `
+                  -PathType Leaf
+              )
+            ) {
+              @"
+          checker_rule_level_override_file was not found:
+
+          $env:RULE_OVERRIDE_FILE
+          "@ |
+                Tee-Object `
+                  -FilePath $checkerLog |
+                Write-Host
+
+              "command_status=Failed" |
+                Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+              exit 0
+            }
+
+            $arguments += @(
+              "--ruleLevelOverride",
+              $env:RULE_OVERRIDE_FILE
+            )
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:EXCLUDED_FILES)) {
+            $arguments += @(
+              "--excludedFiles",
+              $env:EXCLUDED_FILES
+            )
+          }
+
+          if ($env:SAVE_RESULTS -eq "true") {
+            $arguments += "--saveResults"
+          }
+
+          $output = & pac @arguments 2>&1
+          $exitCode = $LASTEXITCODE
+
+          $output |
+            Tee-Object `
+              -FilePath $checkerLog |
+            Write-Host
+
+          $status = if ($exitCode -eq 0) {
+            "Succeeded"
+          }
+          else {
+            "Failed"
+          }
+
+          "command_status=$status" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "checker_log=$checkerLog" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Evaluate Solution Checker results
+        id: checker_result
+        if: always()
         shell: pwsh
         env:
-          DEPLOY: ${{ inputs.deploy_to_validation_environment }}
-          ENVIRONMENT_ID: ${{ steps.environment_details.outputs.environment_id }}
+          RUN_CHECKER: ${{ inputs.run_solution_checker }}
+          CHECKER_COMMAND_STATUS: ${{ steps.checker.outputs.command_status }}
+          CHECKER_OUTPUT: ${{ steps.setup.outputs.checker_folder }}
+          FAIL_ON_ERRORS: ${{ inputs.checker_fail_on_errors }}
         run: |
-          if ($env:DEPLOY -ne "true" -or [string]::IsNullOrWhiteSpace($env:ENVIRONMENT_ID)) {
-            "solution_url=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            "deployment_url=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          $ErrorActionPreference = "Stop"
+
+          if ($env:RUN_CHECKER -ne "true") {
+            "checker_status=Skipped" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            "issue_count=0" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            "error_count=0" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            "warning_count=0" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
             exit 0
           }
 
-          $solutionsUrl = "https://make.powerapps.com/environments/$env:ENVIRONMENT_ID/solutions"
-          "solution_url=$solutionsUrl" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "deployment_url=$solutionsUrl" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          if ($env:CHECKER_COMMAND_STATUS -ne "Succeeded") {
+            "checker_status=Failed" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      - name: Build artifact names
+            "issue_count=0" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            "error_count=0" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            "warning_count=0" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            exit 0
+          }
+
+          $issueCount = 0
+          $errorCount = 0
+          $warningCount = 0
+
+          $sarifFiles = Get-ChildItem `
+            -Path $env:CHECKER_OUTPUT `
+            -Filter *.sarif `
+            -Recurse `
+            -ErrorAction SilentlyContinue
+
+          foreach ($file in $sarifFiles) {
+            try {
+              $sarif = Get-Content `
+                -LiteralPath $file.FullName `
+                -Raw |
+                ConvertFrom-Json
+
+              foreach ($run in @($sarif.runs)) {
+                foreach ($result in @($run.results)) {
+                  $issueCount++
+
+                  switch ([string]$result.level) {
+                    "error" {
+                      $errorCount++
+                    }
+
+                    "warning" {
+                      $warningCount++
+                    }
+                  }
+                }
+              }
+            }
+            catch {
+              Write-Warning @"
+          Could not parse Solution Checker SARIF file:
+
+          $($file.FullName)
+          "@
+            }
+          }
+
+          $checkerStatus = if (
+            $env:FAIL_ON_ERRORS -eq "true" -and
+            $errorCount -gt 0
+          ) {
+            "Failed"
+          }
+          else {
+            "Passed"
+          }
+
+          "checker_status=$checkerStatus" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "issue_count=$issueCount" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "error_count=$errorCount" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "warning_count=$warningCount" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Build validation artifact names
         id: artifact_names
+        if: always()
         shell: pwsh
         env:
           SOLUTION_NAME: ${{ inputs.solution_name }}
         run: |
-          "solution_artifact_name=$($env:SOLUTION_NAME)-pr-validation-${{ github.run_number }}" |
-            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "checker_artifact_name=$($env:SOLUTION_NAME)-checker-${{ github.run_number }}" |
+          $artifactName = (
+            "$($env:SOLUTION_NAME)-validation-" +
+            "${{ github.run_number }}-${{ github.run_attempt }}"
+          )
+
+          "solution_artifact_name=$artifactName" |
             Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      - name: Upload validation artifacts
-        if: inputs.upload_validation_artifacts
+      - name: Evaluate overall validation state
+        id: validation_state
+        if: always()
+        shell: pwsh
+        env:
+          PACK_STATUS: ${{ steps.pack.outputs.pack_status }}
+          CREATE_REQUESTED: ${{ inputs.create_temporary_validation_environment }}
+          ADMIN_AUTH_OUTCOME: ${{ steps.admin_auth.outcome }}
+          NAME_AVAILABLE_OUTCOME: ${{ steps.name_available.outcome }}
+          CREATE_OUTCOME: ${{ steps.create_environment.outcome }}
+          DETAILS_OUTCOME: ${{ steps.environment_details.outcome }}
+          TARGET_AUTH_OUTCOME: ${{ steps.target_auth.outcome }}
+          IMPORT_STATUS: ${{ steps.import_solution.outputs.import_status }}
+          RUN_CHECKER: ${{ inputs.run_solution_checker }}
+          CHECKER_STATUS: ${{ steps.checker_result.outputs.checker_status }}
+        run: |
+          $reasons = @()
+
+          if ($env:PACK_STATUS -ne "Succeeded") {
+            $reasons += "Solution packing did not succeed."
+          }
+
+          if ($env:CREATE_REQUESTED -eq "true") {
+            if ($env:ADMIN_AUTH_OUTCOME -ne "success") {
+              $reasons += "Administration authentication failed."
+            }
+
+            if ($env:NAME_AVAILABLE_OUTCOME -ne "success") {
+              $reasons += "Temporary environment name validation failed."
+            }
+
+            if ($env:CREATE_OUTCOME -ne "success") {
+              $reasons += "Temporary environment creation failed."
+            }
+
+            if ($env:DETAILS_OUTCOME -ne "success") {
+              $reasons += "Temporary environment lookup failed."
+            }
+
+            if ($env:TARGET_AUTH_OUTCOME -ne "success") {
+              $reasons += "Temporary environment authentication failed."
+            }
+
+            if ($env:IMPORT_STATUS -ne "Succeeded") {
+              $reasons += "The exact packed solution failed to import."
+            }
+          }
+
+          if (
+            $env:RUN_CHECKER -eq "true" -and
+            $env:CHECKER_STATUS -ne "Passed"
+          ) {
+            $reasons += "Solution Checker validation did not pass."
+          }
+
+          $validationFailed = $reasons.Count -gt 0
+
+          "validation_failed=$(
+            $validationFailed.ToString().ToLowerInvariant()
+          )" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          $reasonText = if ($reasons.Count -eq 0) {
+            "Validation passed."
+          }
+          else {
+            $reasons -join " "
+          }
+
+          "validation_reason=$reasonText" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Delete temporary validation environment
+        id: delete_environment
+        if: >-
+          ${{
+            always() &&
+            inputs.create_temporary_validation_environment &&
+            inputs.delete_validation_environment_after_validation &&
+            (
+              steps.create_environment.outcome == 'success' ||
+              steps.environment_details.outputs.environment_id != ''
+            ) &&
+            !(
+              inputs.retain_validation_environment_on_failure &&
+              steps.validation_state.outputs.validation_failed == 'true'
+            )
+          }}
+        continue-on-error: true
+        shell: pwsh
+        env:
+          PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          PP_APP_ID: ${{ secrets.pp_app_id }}
+          PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+          ENVIRONMENT_NAME: ${{ steps.setup.outputs.environment_name }}
+          KNOWN_ENVIRONMENT_ID: ${{ steps.environment_details.outputs.environment_id }}
+          LOOKUP_ATTEMPTS: ${{ inputs.environment_lookup_attempts }}
+          LOOKUP_DELAY: ${{ inputs.environment_lookup_delay_seconds }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+          ARTIFACT_ROOT: ${{ steps.setup.outputs.artifact_root }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          pac auth create `
+            --name "pp-val-clean" `
+            --applicationId "$env:PP_APP_ID" `
+            --clientSecret "$env:PP_CLIENT_SECRET" `
+            --tenant "$env:PP_TENANT_ID"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Cleanup administration authentication failed."
+          }
+
+          function Get-PropertyValue {
+            param(
+              [AllowNull()]
+              [object]$Object,
+
+              [Parameter(Mandatory)]
+              [string[]]$Names
+            )
+
+            if ($null -eq $Object) {
+              return ""
+            }
+
+            foreach ($name in $Names) {
+              $property = $Object.PSObject.Properties[$name]
+
+              if (
+                $null -ne $property -and
+                -not [string]::IsNullOrWhiteSpace(
+                  [string]$property.Value
+                )
+              ) {
+                return [string]$property.Value
+              }
+            }
+
+            return ""
+          }
+
+          $environmentId = $env:KNOWN_ENVIRONMENT_ID
+
+          if ([string]::IsNullOrWhiteSpace($environmentId)) {
+            for (
+              $attempt = 1;
+              $attempt -le [int]$env:LOOKUP_ATTEMPTS;
+              $attempt++
+            ) {
+              $raw = & pac admin list `
+                --name "$env:ENVIRONMENT_NAME" `
+                --json
+
+              if ($LASTEXITCODE -ne 0) {
+                throw "Unable to locate the temporary environment for cleanup."
+              }
+
+              $jsonText = $raw -join "`n"
+
+              if (-not [string]::IsNullOrWhiteSpace($jsonText)) {
+                $parsed = $jsonText | ConvertFrom-Json
+
+                $items = if (
+                  $null -ne $parsed.PSObject.Properties["value"]
+                ) {
+                  @($parsed.value)
+                }
+                else {
+                  @($parsed)
+                }
+
+                foreach (
+                  $item in @(
+                    $items |
+                      Where-Object { $null -ne $_ }
+                  )
+                ) {
+                  $name = Get-PropertyValue `
+                    -Object $item `
+                    -Names @(
+                      "Environment",
+                      "DisplayName",
+                      "EnvironmentName",
+                      "FriendlyName",
+                      "Name"
+                    )
+
+                  if ($name -cne $env:ENVIRONMENT_NAME) {
+                    continue
+                  }
+
+                  $environmentId = Get-PropertyValue `
+                    -Object $item `
+                    -Names @(
+                      "Environment Id",
+                      "EnvironmentId",
+                      "Id"
+                    )
+
+                  break
+                }
+              }
+
+              if (
+                -not [string]::IsNullOrWhiteSpace(
+                  $environmentId
+                )
+              ) {
+                break
+              }
+
+              if ($attempt -lt [int]$env:LOOKUP_ATTEMPTS) {
+                Start-Sleep -Seconds ([int]$env:LOOKUP_DELAY)
+              }
+            }
+          }
+
+          if ([string]::IsNullOrWhiteSpace($environmentId)) {
+            "cleanup_status=NotFound" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            "environment_deleted=true" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            exit 0
+          }
+
+          $cleanupLog = Join-Path `
+            $env:ARTIFACT_ROOT `
+            "environment-delete.log"
+
+          $output = & pac admin delete `
+            --environment "$environmentId" `
+            --async `
+            --max-async-wait-time "$env:MAX_WAIT" 2>&1
+
+          $exitCode = $LASTEXITCODE
+
+          $output |
+            Tee-Object `
+              -FilePath $cleanupLog |
+            Write-Host
+
+          if ($exitCode -ne 0) {
+            "cleanup_status=Failed" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            "environment_deleted=false" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            throw "The temporary validation environment could not be deleted."
+          }
+
+          "cleanup_status=Deleted" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "environment_deleted=true" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Resolve cleanup result
+        id: cleanup_result
+        if: always()
+        shell: pwsh
+        env:
+          CREATE_REQUESTED: ${{ inputs.create_temporary_validation_environment }}
+          CREATE_OUTCOME: ${{ steps.create_environment.outcome }}
+          DELETE_REQUESTED: ${{ inputs.delete_validation_environment_after_validation }}
+          RETAIN_ON_FAILURE: ${{ inputs.retain_validation_environment_on_failure }}
+          VALIDATION_FAILED: ${{ steps.validation_state.outputs.validation_failed }}
+          DELETE_STATUS: ${{ steps.delete_environment.outputs.cleanup_status }}
+          DELETE_CONFIRMED: ${{ steps.delete_environment.outputs.environment_deleted }}
+        run: |
+          if ($env:CREATE_REQUESTED -ne "true") {
+            $status = "NotCreated"
+            $deleted = "false"
+            $retained = "false"
+          }
+          elseif (-not [string]::IsNullOrWhiteSpace($env:DELETE_STATUS)) {
+            $status = $env:DELETE_STATUS
+            $deleted = if ($env:DELETE_CONFIRMED -eq "true") {
+              "true"
+            }
+            else {
+              "false"
+            }
+            $retained = if ($deleted -eq "true") {
+              "false"
+            }
+            else {
+              "true"
+            }
+          }
+          elseif ($env:CREATE_OUTCOME -ne "success") {
+            $status = "CreationFailed"
+            $deleted = "false"
+            $retained = "false"
+          }
+          elseif (
+            $env:RETAIN_ON_FAILURE -eq "true" -and
+            $env:VALIDATION_FAILED -eq "true"
+          ) {
+            $status = "RetainedOnFailure"
+            $deleted = "false"
+            $retained = "true"
+          }
+          elseif ($env:DELETE_REQUESTED -ne "true") {
+            $status = "Retained"
+            $deleted = "false"
+            $retained = "true"
+          }
+          else {
+            $status = "CleanupNotRun"
+            $deleted = "false"
+            $retained = "true"
+          }
+
+          "cleanup_status=$status" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "environment_deleted=$deleted" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "environment_retained=$retained" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload exact package and validation logs
+        if: >-
+          ${{
+            always() &&
+            inputs.upload_validation_artifacts &&
+            steps.setup.outputs.artifact_root != ''
+          }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact_names.outputs.solution_artifact_name }}
-          path: ${{ steps.folders.outputs.root }}
-          if-no-files-found: error
+          path: ${{ steps.setup.outputs.artifact_root }}
+          if-no-files-found: warn
           retention-days: ${{ inputs.artifact_retention_days }}
-
-      - name: Record overall validation result
-        id: result
-        shell: pwsh
-        run: |
-          "validation_passed=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Add validation summary
         if: always()
         shell: pwsh
         env:
+          SOURCE_REF: ${{ inputs.source_ref }}
           PACK_STATUS: ${{ steps.pack.outputs.pack_status }}
-          CHECKER_STATUS: ${{ steps.checker_results.outputs.checker_status }}
-          ISSUE_COUNT: ${{ steps.checker_results.outputs.issue_count }}
-          ERROR_COUNT: ${{ steps.checker_results.outputs.error_count }}
-          WARNING_COUNT: ${{ steps.checker_results.outputs.warning_count }}
-          DEPLOYMENT_STATUS: ${{ steps.deployment_result.outputs.deployment_status }}
-          ENVIRONMENT_NAME: ${{ steps.environment_details.outputs.environment_name }}
+          IMPORT_STATUS: ${{ steps.import_solution.outputs.import_status }}
+          CHECKER_STATUS: ${{ steps.checker_result.outputs.checker_status }}
+          ISSUE_COUNT: ${{ steps.checker_result.outputs.issue_count }}
+          ERROR_COUNT: ${{ steps.checker_result.outputs.error_count }}
+          WARNING_COUNT: ${{ steps.checker_result.outputs.warning_count }}
+          VALIDATION_FAILED: ${{ steps.validation_state.outputs.validation_failed }}
+          VALIDATION_REASON: ${{ steps.validation_state.outputs.validation_reason }}
+          ENVIRONMENT_NAME: ${{ steps.setup.outputs.environment_name }}
           ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
-          SOLUTION_URL: ${{ steps.links.outputs.solution_url }}
+          CLEANUP_STATUS: ${{ steps.cleanup_result.outputs.cleanup_status }}
+          ENVIRONMENT_RETAINED: ${{ steps.cleanup_result.outputs.environment_retained }}
+          ARTIFACT_NAME: ${{ steps.artifact_names.outputs.solution_artifact_name }}
         run: |
-          $environmentLine = if ([string]::IsNullOrWhiteSpace($env:ENVIRONMENT_URL)) {
-            "Validation deployment was not requested."
+          $environmentLine = if (
+            $env:ENVIRONMENT_RETAINED -eq "true" -and
+            -not [string]::IsNullOrWhiteSpace(
+              $env:ENVIRONMENT_URL
+            )
+          ) {
+            "**Temporary environment:** [$env:ENVIRONMENT_NAME]($env:ENVIRONMENT_URL)"
           }
           else {
-            "**Validation environment:** [$env:ENVIRONMENT_NAME]($env:ENVIRONMENT_URL)`n`n**Solution:** [Open Solutions]($env:SOLUTION_URL)"
+            "**Temporary environment:** $env:ENVIRONMENT_NAME"
           }
 
           @"
           # Pull request validation
 
+          **Source ref:** ``$env:SOURCE_REF``
+
           **Pack:** ``$env:PACK_STATUS``
+
+          **Clean-environment import:** ``$env:IMPORT_STATUS``
 
           **Solution Checker:** ``$env:CHECKER_STATUS``
 
           **Checker findings:** $env:ISSUE_COUNT total, $env:ERROR_COUNT errors, $env:WARNING_COUNT warnings
 
-          **Deployment:** ``$env:DEPLOYMENT_STATUS``
+          **Validation failed:** ``$env:VALIDATION_FAILED``
+
+          **Result:** $env:VALIDATION_REASON
 
           $environmentLine
-          "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+          **Environment cleanup:** ``$env:CLEANUP_STATUS``
+
+          **Exact validated package and logs:** ``$env:ARTIFACT_NAME``
+          "@ |
+            Out-File `
+              -FilePath $env:GITHUB_STEP_SUMMARY `
+              -Encoding utf8 `
+              -Append
+
+      - name: Report final validation result
+        id: final_result
+        if: always()
+        shell: pwsh
+        env:
+          VALIDATION_FAILED: ${{ steps.validation_state.outputs.validation_failed }}
+          VALIDATION_REASON: ${{ steps.validation_state.outputs.validation_reason }}
+          CREATE_REQUESTED: ${{ inputs.create_temporary_validation_environment }}
+          DELETE_REQUESTED: ${{ inputs.delete_validation_environment_after_validation }}
+          RETAIN_ON_FAILURE: ${{ inputs.retain_validation_environment_on_failure }}
+          CLEANUP_STATUS: ${{ steps.cleanup_result.outputs.cleanup_status }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $cleanupFailure = (
+            $env:CREATE_REQUESTED -eq "true" -and
+            $env:DELETE_REQUESTED -eq "true" -and
+            -not (
+              $env:RETAIN_ON_FAILURE -eq "true" -and
+              $env:VALIDATION_FAILED -eq "true"
+            ) -and
+            @(
+              "Deleted",
+              "NotFound"
+            ) -notcontains $env:CLEANUP_STATUS
+          )
+
+          if ($cleanupFailure) {
+            "validation_passed=false" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            throw @"
+          Validation completed, but the temporary environment cleanup did not
+          complete successfully. Cleanup status: $env:CLEANUP_STATUS
+          "@
+          }
+
+          if ($env:VALIDATION_FAILED -eq "true") {
+            "validation_passed=false" |
+              Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+            throw $env:VALIDATION_REASON
+          }
+
+          "validation_passed=true" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
