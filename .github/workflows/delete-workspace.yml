@@ -108,7 +108,7 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           pac auth create `
-            --name "GitHub-Delete-Admin-${{ github.run_id }}" `
+            --name "pp-delete-admin" `
             --applicationId "$env:PP_APP_ID" `
             --clientSecret "$env:PP_CLIENT_SECRET" `
             --tenant "$env:PP_TENANT_ID"

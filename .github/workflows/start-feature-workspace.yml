@@ -411,7 +411,7 @@ jobs:
           }
 
           pac auth create `
-            --name "GitHub-Source-${{ github.run_id }}" `
+            --name "pp-src" `
             --applicationId "$appId" `
             --clientSecret "$clientSecret" `
             --tenant "$tenantId" `
@@ -617,7 +617,7 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           pac auth create `
-            --name "GitHub-Target-Admin-${{ github.run_id }}" `
+            --name "pp-tgt-admin" `
             --applicationId "$env:PP_APP_ID" `
             --clientSecret "$env:PP_CLIENT_SECRET" `
             --tenant "$env:PP_TENANT_ID"
@@ -890,7 +890,7 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           pac auth create `
-            --name "GitHub-Developer-${{ github.run_id }}" `
+            --name "pp-dev" `
             --applicationId "$env:PP_APP_ID" `
             --clientSecret "$env:PP_CLIENT_SECRET" `
             --tenant "$env:PP_TENANT_ID" `

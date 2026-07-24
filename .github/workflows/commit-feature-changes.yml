@@ -202,7 +202,7 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           pac auth create `
-            --name "GitHub-Feature-Commit-Admin-${{ github.run_id }}" `
+            --name "pp-commit-admin" `
             --applicationId "$env:PP_APP_ID" `
             --clientSecret "$env:PP_CLIENT_SECRET" `
             --tenant "$env:PP_TENANT_ID"
@@ -277,7 +277,7 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           pac auth create `
-            --name "GitHub-Feature-Commit-Target-${{ github.run_id }}" `
+            --name "pp-commit-dev" `
             --applicationId "$env:PP_APP_ID" `
             --clientSecret "$env:PP_CLIENT_SECRET" `
             --tenant "$env:PP_TENANT_ID" `
