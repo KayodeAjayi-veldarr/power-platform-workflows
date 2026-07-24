@@ -1,22 +1,15 @@
-# Central reusable workflow for preparing a Power Platform
-# developer workspace.
+# Reusable Power Platform workflow.
 #
-# Project repositories call this workflow using a small caller file.
+# A project repository calls this workflow and supplies the project-specific
+# values. The shared workflow can prepare a solution from either:
 #
-# Behaviour:
+# 1. Repository: pack the unpacked solution already stored in GitHub.
+# 2. Environment: export a named solution from a source Dataverse environment.
 #
-# Environment does not exist
-#   -> Create the environment
-#   -> Assign the automation application user
-#   -> Assign the developer
-#   -> Pack and import the project solution
+# The target environment is created only when it does not exist. Existing
+# environments are reused and receive the latest solution package.
 #
-# Environment already exists
-#   -> Reuse the existing environment
-#   -> Confirm the user assignments
-#   -> Pack and import the latest project solution again
-#
-# This workflow does not delete or reset environments.
+# This workflow never deletes an environment.
 
 name: Reusable - Prepare Power Platform Developer Workspace
 
@@ -24,7 +17,7 @@ on:
   workflow_call:
     inputs:
       # ============================================================
-      # Required project settings
+      # Project and developer
       # ============================================================
 
       project_key:
@@ -33,102 +26,151 @@ on:
         type: string
 
       developer_alias:
-        description: Short developer name, for example KAYODE
+        description: Short developer identifier used in generated names
         required: true
         type: string
 
       developer_upn:
-        description: Microsoft 365 email address or Entra Object ID
+        description: Developer Microsoft 365 UPN or Entra Object ID
         required: true
         type: string
 
+      # ============================================================
+      # Solution source
+      # ============================================================
+
+      solution_source_mode:
+        description: Repository or Environment
+        required: false
+        default: Repository
+        type: string
+
       solution_name:
-        description: Power Platform solution unique name
+        description: Canonical solution unique name and package name
         required: true
         type: string
 
       solution_source_folder:
-        description: Folder containing the unpacked solution source
-        required: true
+        description: Unpacked solution folder used in Repository mode
+        required: false
+        default: ""
         type: string
 
-      # ============================================================
-      # Optional solution settings
-      # ============================================================
-
       source_ref:
-        description: Git branch or tag containing the solution source
+        description: Git branch or tag used in Repository mode
         required: false
         default: main
         type: string
 
+      source_environment:
+        description: Source Dataverse environment URL or ID used in Environment mode
+        required: false
+        default: ""
+        type: string
+
+      source_solution_name:
+        description: Source solution unique name. Defaults to solution_name when blank.
+        required: false
+        default: ""
+        type: string
+
+      source_export_managed:
+        description: Export a managed package in Environment mode
+        required: false
+        default: false
+        type: boolean
+
+      source_export_async:
+        description: Export the source solution asynchronously
+        required: false
+        default: true
+        type: boolean
+
+      source_export_include:
+        description: Optional comma-separated export settings such as general,autonumbering
+        required: false
+        default: ""
+        type: string
+
       solution_package_type:
-        description: Package the solution as Unmanaged or Managed
+        description: Unmanaged or Managed when packing in Repository mode
         required: false
         default: Unmanaged
         type: string
 
       deployment_settings_file:
-        description: Optional deployment settings JSON file path
+        description: Optional deployment settings JSON file in the project repository
         required: false
         default: ""
         type: string
 
       # ============================================================
-      # Optional environment settings
+      # Target environment
       # ============================================================
 
       environment_type:
-        description: Power Platform environment type
+        description: Developer, Sandbox, Production, Trial, Teams or SubscriptionBasedTrial
         required: false
         default: Developer
         type: string
 
       environment_name:
-        description: Optional full environment name. Generated when blank.
+        description: Full target environment name. Generated when blank.
         required: false
         default: ""
         type: string
 
       environment_domain:
-        description: Optional Dataverse domain. Generated when blank.
+        description: Target Dataverse domain. Generated when blank.
         required: false
         default: ""
         type: string
 
       environment_suffix:
-        description: Suffix used when generating the environment name
+        description: Suffix used in generated environment names
         required: false
         default: DEV
         type: string
 
-      environment_language:
-        description: Default language used when creating the environment
-        required: false
-        default: English
-        type: string
-
-      region:
-        description: Power Platform region
+      environment_region:
+        description: Target Power Platform region
         required: false
         default: europe
         type: string
 
-      currency:
-        description: Default Dataverse currency code
+      environment_currency:
+        description: Target Dataverse currency code
         required: false
         default: GBP
         type: string
 
+      environment_language:
+        description: Target environment language
+        required: false
+        default: English
+        type: string
+
+      environment_templates:
+        description: Optional comma-separated Dynamics 365 templates
+        required: false
+        default: ""
+        type: string
+
+      environment_security_group_id:
+        description: Optional Entra security group ID
+        required: false
+        default: ""
+        type: string
+
       # ============================================================
-      # Access settings
+      # Access
       # ============================================================
 
-      developer_role:
-        description: Dataverse role assigned to the developer
+      assign_automation_user:
+        description: Add or confirm the automation application user
         required: false
-        default: System Administrator
-        type: string
+        default: true
+        type: boolean
 
       automation_role:
         description: Dataverse role assigned to the automation application
@@ -136,18 +178,30 @@ on:
         default: System Administrator
         type: string
 
+      assign_developer:
+        description: Add or confirm the human developer
+        required: false
+        default: true
+        type: boolean
+
+      developer_role:
+        description: Dataverse role assigned to the developer
+        required: false
+        default: System Administrator
+        type: string
+
       # ============================================================
-      # Solution import settings
+      # Import behaviour
       # ============================================================
 
       force_overwrite:
-        description: Overwrite unmanaged customisations during import
+        description: Overwrite unmanaged customisations
         required: false
         default: true
         type: boolean
 
       publish_changes:
-        description: Publish changes after a successful import
+        description: Publish after a successful import
         required: false
         default: true
         type: boolean
@@ -158,18 +212,36 @@ on:
         default: false
         type: boolean
 
+      activate_plugins:
+        description: Activate plug-ins and workflows during import
+        required: false
+        default: false
+        type: boolean
+
+      skip_dependency_check:
+        description: Skip dependencies marked as product updates
+        required: false
+        default: false
+        type: boolean
+
+      skip_lower_version:
+        description: Skip import when the same or a higher version exists
+        required: false
+        default: false
+        type: boolean
+
       # ============================================================
-      # Retry and diagnostic settings
+      # Timing and diagnostics
       # ============================================================
 
       max_async_wait_minutes:
-        description: Maximum PAC CLI wait time in minutes
+        description: PAC CLI wait time for long-running operations
         required: false
         default: 60
         type: number
 
       environment_lookup_attempts:
-        description: Number of attempts used to retrieve environment details
+        description: Attempts used to retrieve the target environment
         required: false
         default: 20
         type: number
@@ -181,53 +253,60 @@ on:
         type: number
 
       upload_solution_artifact:
-        description: Upload the generated ZIP and pack log
+        description: Upload the generated solution package and diagnostic files
         required: false
         default: true
         type: boolean
 
       artifact_retention_days:
-        description: Number of days to retain the generated artifact
+        description: Number of days to retain the artifact
         required: false
         default: 7
         type: number
 
       next_step_message:
-        description: Project-specific instruction shown after deployment
+        description: Project-specific instruction displayed in the run summary
         required: false
         default: Validate the solution before beginning development.
         type: string
 
-    # These secrets are passed by the project caller workflow.
     secrets:
+      # Credentials used for target tenant administration and import.
       pp_tenant_id:
-        description: Microsoft Entra tenant ID
         required: true
 
       pp_app_id:
-        description: Automation application ID
         required: true
 
       pp_client_secret:
-        description: Automation application client secret
         required: true
 
-    # Values returned to the caller workflow.
+      # Optional credentials for a source environment in another tenant.
+      # When omitted, the target credentials above are reused.
+      source_pp_tenant_id:
+        required: false
+
+      source_pp_app_id:
+        required: false
+
+      source_pp_client_secret:
+        required: false
+
     outputs:
       environment_id:
-        description: ID of the prepared Power Platform environment
+        description: Target environment ID
         value: ${{ jobs.prepare-workspace.outputs.environment_id }}
 
       environment_name:
-        description: Name of the prepared Power Platform environment
+        description: Target environment name
         value: ${{ jobs.prepare-workspace.outputs.environment_name }}
 
       environment_url:
-        description: URL of the prepared Power Platform environment
+        description: Target environment URL
         value: ${{ jobs.prepare-workspace.outputs.environment_url }}
 
       solution_artifact_name:
-        description: Name of the generated solution artifact
+        description: Generated solution artifact name
         value: ${{ jobs.prepare-workspace.outputs.solution_artifact_name }}
 
 permissions:
@@ -236,12 +315,9 @@ permissions:
 jobs:
   prepare-workspace:
     name: Prepare Power Platform developer workspace
-
     runs-on: windows-latest
     timeout-minutes: 120
 
-    # Prevent two runs from modifying the same developer environment
-    # at the same time.
     concurrency:
       group: >-
         power-platform-${{ github.repository }}-${{
@@ -252,44 +328,71 @@ jobs:
       environment_id: ${{ steps.environment_details.outputs.environment_id }}
       environment_name: ${{ steps.workspace_names.outputs.environment_name }}
       environment_url: ${{ steps.environment_details.outputs.environment_url }}
-      solution_artifact_name: ${{ steps.pack_solution.outputs.artifact_name }}
+      solution_artifact_name: ${{ steps.package_details.outputs.artifact_name }}
 
     steps:
-      # ============================================================
-      # 1. Check out the calling project repository
-      # ============================================================
-
-      # In a reusable workflow, github.repository refers to the
-      # repository containing the caller workflow.
-      - name: Check out project source
+      # The checkout action retrieves the project repository that called
+      # this shared workflow, not the shared workflow repository.
+      - name: Check out calling project
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
           ref: ${{ inputs.source_ref }}
 
-      # Install PAC CLI and make pac available to later steps.
       - name: Install Power Platform tools
         uses: microsoft/powerplatform-actions/actions-install@v1
         with:
           add-tools-to-path: "true"
 
-      # ============================================================
-      # 2. Validate the project settings
-      # ============================================================
-
-      - name: Validate configuration and solution source
+      - name: Validate configuration
         shell: pwsh
         env:
-          ENVIRONMENT_TYPE: ${{ inputs.environment_type }}
-          SOLUTION_NAME: ${{ inputs.solution_name }}
-          SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
+          SOURCE_MODE: ${{ inputs.solution_source_mode }}
+          SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
+          SOURCE_ENVIRONMENT: ${{ inputs.source_environment }}
           SOLUTION_PACKAGE_TYPE: ${{ inputs.solution_package_type }}
-          MAX_ASYNC_WAIT_MINUTES: ${{ inputs.max_async_wait_minutes }}
+          ENVIRONMENT_TYPE: ${{ inputs.environment_type }}
+          SECURITY_GROUP_ID: ${{ inputs.environment_security_group_id }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
           LOOKUP_ATTEMPTS: ${{ inputs.environment_lookup_attempts }}
-          LOOKUP_DELAY_SECONDS: ${{ inputs.environment_lookup_delay_seconds }}
-          ARTIFACT_RETENTION_DAYS: ${{ inputs.artifact_retention_days }}
+          LOOKUP_DELAY: ${{ inputs.environment_lookup_delay_seconds }}
+          RETENTION_DAYS: ${{ inputs.artifact_retention_days }}
         run: |
           $ErrorActionPreference = "Stop"
+
+          $allowedSourceModes = @("Repository", "Environment")
+          if ($allowedSourceModes -notcontains $env:SOURCE_MODE) {
+            throw "solution_source_mode must be Repository or Environment."
+          }
+
+          if ($env:SOURCE_MODE -eq "Repository") {
+            if (
+              [string]::IsNullOrWhiteSpace($env:SOURCE_FOLDER) -or
+              -not (
+                Test-Path `
+                  -LiteralPath $env:SOURCE_FOLDER `
+                  -PathType Container
+              )
+            ) {
+              throw @"
+          Repository mode requires a valid solution_source_folder.
+
+          Supplied value:
+          $env:SOURCE_FOLDER
+          "@
+            }
+
+            if (@("Unmanaged", "Managed") -notcontains $env:SOLUTION_PACKAGE_TYPE) {
+              throw "solution_package_type must be Unmanaged or Managed."
+            }
+          }
+
+          if (
+            $env:SOURCE_MODE -eq "Environment" -and
+            [string]::IsNullOrWhiteSpace($env:SOURCE_ENVIRONMENT)
+          ) {
+            throw "Environment mode requires source_environment."
+          }
 
           $allowedEnvironmentTypes = @(
             "Developer",
@@ -300,216 +403,108 @@ jobs:
             "SubscriptionBasedTrial"
           )
 
-          if (
-            $allowedEnvironmentTypes -notcontains
-            $env:ENVIRONMENT_TYPE
-          ) {
-            throw @"
-          Unsupported environment type:
-
-          $env:ENVIRONMENT_TYPE
-          "@
-          }
-
-          $allowedPackageTypes = @(
-            "Unmanaged",
-            "Managed"
-          )
-
-          if (
-            $allowedPackageTypes -notcontains
-            $env:SOLUTION_PACKAGE_TYPE
-          ) {
-            throw @"
-          Unsupported solution package type:
-
-          $env:SOLUTION_PACKAGE_TYPE
-
-          Supported values are Unmanaged and Managed.
-          "@
+          if ($allowedEnvironmentTypes -notcontains $env:ENVIRONMENT_TYPE) {
+            throw "Unsupported environment_type: $env:ENVIRONMENT_TYPE"
           }
 
           if (
-            -not (
-              Test-Path `
-                -LiteralPath $env:SOLUTION_SOURCE_FOLDER `
-                -PathType Container
-            )
+            $env:ENVIRONMENT_TYPE -eq "Teams" -and
+            [string]::IsNullOrWhiteSpace($env:SECURITY_GROUP_ID)
           ) {
-            throw @"
-          Solution source folder not found:
-
-          $env:SOLUTION_SOURCE_FOLDER
-
-          Confirm that the caller supplied the correct folder.
-          "@
+            throw "A Teams environment requires environment_security_group_id."
           }
 
-          foreach ($numberSetting in @(
-            @{
-              Name = "max_async_wait_minutes"
-              Value = $env:MAX_ASYNC_WAIT_MINUTES
-            },
-            @{
-              Name = "environment_lookup_attempts"
-              Value = $env:LOOKUP_ATTEMPTS
-            },
-            @{
-              Name = "environment_lookup_delay_seconds"
-              Value = $env:LOOKUP_DELAY_SECONDS
-            },
-            @{
-              Name = "artifact_retention_days"
-              Value = $env:ARTIFACT_RETENTION_DAYS
-            }
+          foreach ($setting in @(
+            @{ Name = "max_async_wait_minutes"; Value = $env:MAX_WAIT },
+            @{ Name = "environment_lookup_attempts"; Value = $env:LOOKUP_ATTEMPTS },
+            @{ Name = "environment_lookup_delay_seconds"; Value = $env:LOOKUP_DELAY },
+            @{ Name = "artifact_retention_days"; Value = $env:RETENTION_DAYS }
           )) {
-            $parsedValue = 0
-
-            $validNumber = [int]::TryParse(
-              [string]$numberSetting.Value,
-              [ref]$parsedValue
-            )
-
+            $parsed = 0
             if (
-              -not $validNumber -or
-              $parsedValue -lt 1
+              -not [int]::TryParse([string]$setting.Value, [ref]$parsed) -or
+              $parsed -lt 1
             ) {
-              throw "$($numberSetting.Name) must be greater than zero."
+              throw "$($setting.Name) must be greater than zero."
             }
           }
 
-          Write-Host "Checking Power Platform CLI installation..."
-
-          $pacCommand = Get-Command pac `
-            -ErrorAction SilentlyContinue
-
+          $pacCommand = Get-Command pac -ErrorAction SilentlyContinue
           if ($null -eq $pacCommand) {
-            throw @"
-          Power Platform CLI was installed, but pac was not
-          added to PATH.
-          "@
+            throw "PAC CLI was installed but pac is not available on PATH."
           }
 
-          Write-Host "PAC CLI location:"
-          Write-Host $pacCommand.Source
+          Write-Host "PAC CLI: $($pacCommand.Source)"
+          Write-Host "Solution source mode: $env:SOURCE_MODE"
+          Write-Host "Target environment type: $env:ENVIRONMENT_TYPE"
 
-          Write-Host ""
-          Write-Host "Project configuration:"
-          Write-Host "Repository: ${{ github.repository }}"
-          Write-Host "Solution: $env:SOLUTION_NAME"
-          Write-Host "Source folder: $env:SOLUTION_SOURCE_FOLDER"
-          Write-Host "Package type: $env:SOLUTION_PACKAGE_TYPE"
-          Write-Host "Environment type: $env:ENVIRONMENT_TYPE"
-
-      # ============================================================
-      # 3. Generate the environment name and domain
-      # ============================================================
-
-      - name: Generate environment name and domain
+      - name: Generate target environment name and domain
         id: workspace_names
         shell: pwsh
         env:
           PROJECT_KEY: ${{ inputs.project_key }}
           DEVELOPER_ALIAS: ${{ inputs.developer_alias }}
-          REQUESTED_ENVIRONMENT_NAME: ${{ inputs.environment_name }}
-          REQUESTED_ENVIRONMENT_DOMAIN: ${{ inputs.environment_domain }}
+          REQUESTED_NAME: ${{ inputs.environment_name }}
+          REQUESTED_DOMAIN: ${{ inputs.environment_domain }}
           ENVIRONMENT_SUFFIX: ${{ inputs.environment_suffix }}
         run: |
           $ErrorActionPreference = "Stop"
 
           function Convert-ToSafeName {
-            param(
-              [Parameter(Mandatory)]
-              [string]$Value
-            )
+            param([Parameter(Mandatory)][string]$Value)
 
-            $safeValue = $Value.ToUpperInvariant()
-            $safeValue = $safeValue -replace '[^A-Z0-9-]', '-'
-            $safeValue = $safeValue -replace '-+', '-'
-
-            return $safeValue.Trim('-')
+            $result = $Value.ToUpperInvariant()
+            $result = $result -replace '[^A-Z0-9-]', '-'
+            $result = $result -replace '-+', '-'
+            return $result.Trim('-')
           }
 
           function Convert-ToSafeDomain {
-            param(
-              [Parameter(Mandatory)]
-              [string]$Value
-            )
+            param([Parameter(Mandatory)][string]$Value)
 
-            $safeValue = $Value.ToLowerInvariant()
-            $safeValue = $safeValue -replace '[^a-z0-9-]', '-'
-            $safeValue = $safeValue -replace '-+', '-'
-
-            return $safeValue.Trim('-')
+            $result = $Value.ToLowerInvariant()
+            $result = $result -replace '[^a-z0-9-]', '-'
+            $result = $result -replace '-+', '-'
+            return $result.Trim('-')
           }
 
-          $projectKey = Convert-ToSafeName `
-            -Value $env:PROJECT_KEY
+          $projectKey = Convert-ToSafeName $env:PROJECT_KEY
+          $developerAlias = Convert-ToSafeName $env:DEVELOPER_ALIAS
+          $suffix = Convert-ToSafeName $env:ENVIRONMENT_SUFFIX
 
-          $developerAlias = Convert-ToSafeName `
-            -Value $env:DEVELOPER_ALIAS
-
-          $environmentSuffix = Convert-ToSafeName `
-            -Value $env:ENVIRONMENT_SUFFIX
-
-          if (
-            [string]::IsNullOrWhiteSpace(
-              $env:REQUESTED_ENVIRONMENT_NAME
-            )
-          ) {
-            $environmentName = `
-              "$projectKey-$developerAlias-$environmentSuffix"
+          if ([string]::IsNullOrWhiteSpace($env:REQUESTED_NAME)) {
+            $environmentName = "$projectKey-$developerAlias-$suffix"
           }
           else {
-            $environmentName = `
-              $env:REQUESTED_ENVIRONMENT_NAME.Trim()
+            $environmentName = $env:REQUESTED_NAME.Trim()
           }
 
-          if (
-            [string]::IsNullOrWhiteSpace(
-              $env:REQUESTED_ENVIRONMENT_DOMAIN
-            )
-          ) {
+          if ([string]::IsNullOrWhiteSpace($env:REQUESTED_DOMAIN)) {
             $environmentDomain = Convert-ToSafeDomain `
-              -Value "$projectKey-$developerAlias-$environmentSuffix"
+              "$projectKey-$developerAlias-$suffix"
           }
           else {
-            $environmentDomain = Convert-ToSafeDomain `
-              -Value $env:REQUESTED_ENVIRONMENT_DOMAIN
+            $environmentDomain = Convert-ToSafeDomain $env:REQUESTED_DOMAIN
           }
 
           if ([string]::IsNullOrWhiteSpace($environmentName)) {
-            throw "A valid environment name could not be generated."
+            throw "A valid target environment name could not be generated."
           }
 
           if ([string]::IsNullOrWhiteSpace($environmentDomain)) {
-            throw "A valid environment domain could not be generated."
+            throw "A valid target environment domain could not be generated."
           }
 
-          Write-Host "Environment name:"
-          Write-Host $environmentName
-
-          Write-Host ""
-          Write-Host "Environment domain:"
-          Write-Host $environmentDomain
+          Write-Host "Target environment name: $environmentName"
+          Write-Host "Target environment domain: $environmentDomain"
 
           "environment_name=$environmentName" |
-            Out-File `
-              -FilePath $env:GITHUB_OUTPUT `
-              -Encoding utf8 `
-              -Append
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           "environment_domain=$environmentDomain" |
-            Out-File `
-              -FilePath $env:GITHUB_OUTPUT `
-              -Encoding utf8 `
-              -Append
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      # ============================================================
-      # 4. Authenticate for tenant administration
-      # ============================================================
-
-      - name: Authenticate for Power Platform administration
+      - name: Authenticate for target tenant administration
         shell: pwsh
         env:
           PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
@@ -518,21 +513,15 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          foreach ($variableName in @(
+          foreach ($name in @(
             "PP_TENANT_ID",
             "PP_APP_ID",
             "PP_CLIENT_SECRET"
           )) {
-            $value = Get-Item "Env:$variableName" `
-              -ErrorAction SilentlyContinue
+            $value = (Get-Item "Env:$name" -ErrorAction SilentlyContinue).Value
 
-            if (
-              $null -eq $value -or
-              [string]::IsNullOrWhiteSpace(
-                $value.Value
-              )
-            ) {
-              throw "Required secret $variableName is missing."
+            if ([string]::IsNullOrWhiteSpace($value)) {
+              throw "Required secret $name is missing."
             }
           }
 
@@ -548,11 +537,7 @@ jobs:
 
           pac auth who
 
-      # ============================================================
-      # 5. Find an existing environment
-      # ============================================================
-
-      - name: Find existing environment
+      - name: Find existing target environment
         id: find_environment
         shell: pwsh
         env:
@@ -561,10 +546,7 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           function Get-PropertyValue {
-            param(
-              [object]$Object,
-              [string[]]$Names
-            )
+            param([object]$Object, [string[]]$Names)
 
             if ($null -eq $Object) {
               return $null
@@ -575,9 +557,7 @@ jobs:
 
               if (
                 $null -ne $property -and
-                -not [string]::IsNullOrWhiteSpace(
-                  [string]$property.Value
-                )
+                -not [string]::IsNullOrWhiteSpace([string]$property.Value)
               ) {
                 return [string]$property.Value
               }
@@ -586,134 +566,82 @@ jobs:
             return $null
           }
 
-          $rawOutput = & pac admin list `
-            --name "$env:ENVIRONMENT_NAME" `
-            --json
-
+          $raw = & pac admin list --name "$env:ENVIRONMENT_NAME" --json
           if ($LASTEXITCODE -ne 0) {
             throw "Unable to retrieve Power Platform environments."
           }
 
-          $jsonText = $rawOutput -join "`n"
-
-          if ([string]::IsNullOrWhiteSpace($jsonText)) {
-            Write-Host "Environment does not currently exist."
-
-            "exists=false" |
-              Out-File `
-                -FilePath $env:GITHUB_OUTPUT `
-                -Encoding utf8 `
-                -Append
-
+          $text = $raw -join "`n"
+          if ([string]::IsNullOrWhiteSpace($text)) {
+            "exists=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
             exit 0
           }
 
           try {
-            $parsedResult = $jsonText |
-              ConvertFrom-Json
+            $parsed = $text | ConvertFrom-Json
           }
           catch {
-            Write-Host $jsonText
-
+            Write-Host $text
             throw "The environment list response was not valid JSON."
           }
 
-          if ($null -ne $parsedResult.value) {
-            $environments = @($parsedResult.value)
+          if ($null -ne $parsed.value) {
+            $environments = @($parsed.value)
           }
           else {
-            $environments = @($parsedResult)
+            $environments = @($parsed)
           }
 
-          $matchingEnvironment = $null
+          $match = $null
 
           foreach ($environment in $environments) {
             $name = Get-PropertyValue `
-              -Object $environment `
-              -Names @(
-                "Environment",
-                "DisplayName",
-                "EnvironmentName",
-                "FriendlyName"
-              )
+              $environment `
+              @("Environment", "DisplayName", "EnvironmentName", "FriendlyName")
 
             if ($name -eq $env:ENVIRONMENT_NAME) {
-              $matchingEnvironment = $environment
+              $match = $environment
               break
             }
           }
 
-          if ($null -eq $matchingEnvironment) {
-            Write-Host "Environment does not currently exist."
-
-            "exists=false" |
-              Out-File `
-                -FilePath $env:GITHUB_OUTPUT `
-                -Encoding utf8 `
-                -Append
-
+          if ($null -eq $match) {
+            Write-Host "Target environment does not currently exist."
+            "exists=false" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
             exit 0
           }
 
-          $environmentId = Get-PropertyValue `
-            -Object $matchingEnvironment `
-            -Names @(
-              "EnvironmentId",
-              "Environment Id",
-              "Id"
-            )
+          $id = Get-PropertyValue `
+            $match `
+            @("EnvironmentId", "Environment Id", "Id")
 
-          $environmentUrl = Get-PropertyValue `
-            -Object $matchingEnvironment `
-            -Names @(
-              "EnvironmentUrl",
-              "Environment Url",
-              "Url"
-            )
+          $url = Get-PropertyValue `
+            $match `
+            @("EnvironmentUrl", "Environment Url", "Url")
 
-          Write-Host "Existing environment found."
-          Write-Host "Environment ID: $environmentId"
-          Write-Host "Environment URL: $environmentUrl"
+          Write-Host "Existing target environment found."
+          Write-Host "Environment ID: $id"
+          Write-Host "Environment URL: $url"
 
-          "exists=true" |
-            Out-File `
-              -FilePath $env:GITHUB_OUTPUT `
-              -Encoding utf8 `
-              -Append
+          "exists=true" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_id=$id" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "environment_url=$url" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-          "environment_id=$environmentId" |
-            Out-File `
-              -FilePath $env:GITHUB_OUTPUT `
-              -Encoding utf8 `
-              -Append
-
-          "environment_url=$environmentUrl" |
-            Out-File `
-              -FilePath $env:GITHUB_OUTPUT `
-              -Encoding utf8 `
-              -Append
-
-      # ============================================================
-      # 6. Create the environment only when it is missing
-      # ============================================================
-
-      # There is deliberately no delete or recreate step.
-      - name: Create environment when required
+      - name: Create target environment when required
         if: steps.find_environment.outputs.exists == 'false'
         shell: pwsh
         env:
           ENVIRONMENT_NAME: ${{ steps.workspace_names.outputs.environment_name }}
           ENVIRONMENT_DOMAIN: ${{ steps.workspace_names.outputs.environment_domain }}
           ENVIRONMENT_TYPE: ${{ inputs.environment_type }}
-          REGION: ${{ inputs.region }}
-          CURRENCY: ${{ inputs.currency }}
+          ENVIRONMENT_REGION: ${{ inputs.environment_region }}
+          ENVIRONMENT_CURRENCY: ${{ inputs.environment_currency }}
           ENVIRONMENT_LANGUAGE: ${{ inputs.environment_language }}
-          MAX_ASYNC_WAIT_MINUTES: ${{ inputs.max_async_wait_minutes }}
+          ENVIRONMENT_TEMPLATES: ${{ inputs.environment_templates }}
+          SECURITY_GROUP_ID: ${{ inputs.environment_security_group_id }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
         run: |
           $ErrorActionPreference = "Stop"
-
-          Write-Host "Creating environment:"
-          Write-Host $env:ENVIRONMENT_NAME
 
           $arguments = @(
             "--log-to-console",
@@ -724,43 +652,44 @@ jobs:
             "--type",
             $env:ENVIRONMENT_TYPE,
             "--region",
-            $env:REGION,
+            $env:ENVIRONMENT_REGION,
             "--currency",
-            $env:CURRENCY,
+            $env:ENVIRONMENT_CURRENCY,
             "--domain",
             $env:ENVIRONMENT_DOMAIN,
             "--language",
             $env:ENVIRONMENT_LANGUAGE,
             "--max-async-wait-time",
-            $env:MAX_ASYNC_WAIT_MINUTES,
+            $env:MAX_WAIT,
             "--json"
           )
+
+          if (-not [string]::IsNullOrWhiteSpace($env:ENVIRONMENT_TEMPLATES)) {
+            $arguments += @("--templates", $env:ENVIRONMENT_TEMPLATES)
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:SECURITY_GROUP_ID)) {
+            $arguments += @("--security-group-id", $env:SECURITY_GROUP_ID)
+          }
 
           & pac @arguments
 
           if ($LASTEXITCODE -ne 0) {
-            throw "The Power Platform environment could not be created."
+            throw "The target Power Platform environment could not be created."
           }
 
-      # ============================================================
-      # 7. Retrieve the prepared environment details
-      # ============================================================
-
-      - name: Retrieve prepared environment details
+      - name: Retrieve target environment details
         id: environment_details
         shell: pwsh
         env:
           ENVIRONMENT_NAME: ${{ steps.workspace_names.outputs.environment_name }}
           LOOKUP_ATTEMPTS: ${{ inputs.environment_lookup_attempts }}
-          LOOKUP_DELAY_SECONDS: ${{ inputs.environment_lookup_delay_seconds }}
+          LOOKUP_DELAY: ${{ inputs.environment_lookup_delay_seconds }}
         run: |
           $ErrorActionPreference = "Stop"
 
           function Get-PropertyValue {
-            param(
-              [object]$Object,
-              [string[]]$Names
-            )
+            param([object]$Object, [string[]]$Names)
 
             if ($null -eq $Object) {
               return $null
@@ -771,9 +700,7 @@ jobs:
 
               if (
                 $null -ne $property -and
-                -not [string]::IsNullOrWhiteSpace(
-                  [string]$property.Value
-                )
+                -not [string]::IsNullOrWhiteSpace([string]$property.Value)
               ) {
                 return [string]$property.Value
               }
@@ -783,88 +710,61 @@ jobs:
           }
 
           $maximumAttempts = [int]$env:LOOKUP_ATTEMPTS
-          $delaySeconds = [int]$env:LOOKUP_DELAY_SECONDS
+          $delaySeconds = [int]$env:LOOKUP_DELAY
 
           $environmentId = $null
           $environmentUrl = $null
 
-          for (
-            $attempt = 1;
-            $attempt -le $maximumAttempts;
-            $attempt++
-          ) {
-            Write-Host `
-              "Environment lookup attempt $attempt of $maximumAttempts."
+          for ($attempt = 1; $attempt -le $maximumAttempts; $attempt++) {
+            Write-Host "Target environment lookup $attempt of $maximumAttempts."
 
-            $rawOutput = & pac admin list `
-              --name "$env:ENVIRONMENT_NAME" `
-              --json
-
+            $raw = & pac admin list --name "$env:ENVIRONMENT_NAME" --json
             if ($LASTEXITCODE -ne 0) {
               throw "Unable to retrieve Power Platform environments."
             }
 
-            $jsonText = $rawOutput -join "`n"
+            $text = $raw -join "`n"
 
-            if (-not [string]::IsNullOrWhiteSpace($jsonText)) {
+            if (-not [string]::IsNullOrWhiteSpace($text)) {
               try {
-                $parsedResult = $jsonText |
-                  ConvertFrom-Json
+                $parsed = $text | ConvertFrom-Json
               }
               catch {
-                Write-Host $jsonText
-
+                Write-Host $text
                 throw "The environment list response was not valid JSON."
               }
 
-              if ($null -ne $parsedResult.value) {
-                $environments = @($parsedResult.value)
+              if ($null -ne $parsed.value) {
+                $environments = @($parsed.value)
               }
               else {
-                $environments = @($parsedResult)
+                $environments = @($parsed)
               }
 
               foreach ($environment in $environments) {
                 $name = Get-PropertyValue `
-                  -Object $environment `
-                  -Names @(
-                    "Environment",
-                    "DisplayName",
-                    "EnvironmentName",
-                    "FriendlyName"
-                  )
+                  $environment `
+                  @("Environment", "DisplayName", "EnvironmentName", "FriendlyName")
 
                 if ($name -ne $env:ENVIRONMENT_NAME) {
                   continue
                 }
 
                 $environmentId = Get-PropertyValue `
-                  -Object $environment `
-                  -Names @(
-                    "EnvironmentId",
-                    "Environment Id",
-                    "Id"
-                  )
+                  $environment `
+                  @("EnvironmentId", "Environment Id", "Id")
 
                 $environmentUrl = Get-PropertyValue `
-                  -Object $environment `
-                  -Names @(
-                    "EnvironmentUrl",
-                    "Environment Url",
-                    "Url"
-                  )
+                  $environment `
+                  @("EnvironmentUrl", "Environment Url", "Url")
 
                 break
               }
             }
 
             if (
-              -not [string]::IsNullOrWhiteSpace(
-                $environmentId
-              ) -and
-              -not [string]::IsNullOrWhiteSpace(
-                $environmentUrl
-              )
+              -not [string]::IsNullOrWhiteSpace($environmentId) -and
+              -not [string]::IsNullOrWhiteSpace($environmentUrl)
             ) {
               break
             }
@@ -875,37 +775,24 @@ jobs:
           }
 
           if ([string]::IsNullOrWhiteSpace($environmentId)) {
-            throw "The prepared environment ID could not be identified."
+            throw "The target environment ID could not be identified."
           }
 
           if ([string]::IsNullOrWhiteSpace($environmentUrl)) {
-            throw "The prepared environment URL could not be identified."
+            throw "The target environment URL could not be identified."
           }
 
-          Write-Host "Environment ID:"
-          Write-Host $environmentId
-
-          Write-Host ""
-          Write-Host "Environment URL:"
-          Write-Host $environmentUrl
+          Write-Host "Target environment ID: $environmentId"
+          Write-Host "Target environment URL: $environmentUrl"
 
           "environment_id=$environmentId" |
-            Out-File `
-              -FilePath $env:GITHUB_OUTPUT `
-              -Encoding utf8 `
-              -Append
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           "environment_url=$environmentUrl" |
-            Out-File `
-              -FilePath $env:GITHUB_OUTPUT `
-              -Encoding utf8 `
-              -Append
-
-      # ============================================================
-      # 8. Assign the automation application user
-      # ============================================================
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Assign automation application user
+        if: inputs.assign_automation_user
         shell: pwsh
         env:
           PP_APP_ID: ${{ secrets.pp_app_id }}
@@ -914,30 +801,18 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          $arguments = @(
-            "--log-to-console",
-            "admin",
-            "assign-user",
-            "--environment",
-            $env:ENVIRONMENT_ID,
-            "--user",
-            $env:PP_APP_ID,
-            "--role",
-            $env:AUTOMATION_ROLE,
-            "--application-user"
-          )
-
-          & pac @arguments
+          pac --log-to-console admin assign-user `
+            --environment "$env:ENVIRONMENT_ID" `
+            --user "$env:PP_APP_ID" `
+            --role "$env:AUTOMATION_ROLE" `
+            --application-user
 
           if ($LASTEXITCODE -ne 0) {
             throw "The automation application user could not be assigned."
           }
 
-      # ============================================================
-      # 9. Assign the developer
-      # ============================================================
-
       - name: Assign developer
+        if: inputs.assign_developer
         shell: pwsh
         env:
           DEVELOPER_UPN: ${{ inputs.developer_upn }}
@@ -946,136 +821,229 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          $arguments = @(
-            "--log-to-console",
-            "admin",
-            "assign-user",
-            "--environment",
-            $env:ENVIRONMENT_ID,
-            "--user",
-            $env:DEVELOPER_UPN,
-            "--role",
-            $env:DEVELOPER_ROLE
-          )
-
-          & pac @arguments
+          pac --log-to-console admin assign-user `
+            --environment "$env:ENVIRONMENT_ID" `
+            --user "$env:DEVELOPER_UPN" `
+            --role "$env:DEVELOPER_ROLE"
 
           if ($LASTEXITCODE -ne 0) {
             throw "The developer could not be assigned."
           }
 
-      # ============================================================
-      # 10. Pack the solution from the project repository
-      # ============================================================
+      - name: Create package output folder
+        shell: pwsh
+        run: |
+          $folder = Join-Path $env:RUNNER_TEMP "power-platform-solutions"
+          New-Item -ItemType Directory -Path $folder -Force | Out-Null
 
-      - name: Pack project solution
-        id: pack_solution
+          "PACKAGE_OUTPUT_FOLDER=$folder" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Pack solution from repository
+        if: inputs.solution_source_mode == 'Repository'
         shell: pwsh
         env:
           SOLUTION_NAME: ${{ inputs.solution_name }}
-          SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
-          SOLUTION_PACKAGE_TYPE: ${{ inputs.solution_package_type }}
+          SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
+          PACKAGE_TYPE: ${{ inputs.solution_package_type }}
         run: |
           $ErrorActionPreference = "Stop"
 
-          $outputFolder = Join-Path `
-            $env:RUNNER_TEMP `
-            "power-platform-solutions"
-
-          New-Item `
-            -ItemType Directory `
-            -Path $outputFolder `
-            -Force |
-            Out-Null
-
           $solutionZip = Join-Path `
-            $outputFolder `
+            $env:PACKAGE_OUTPUT_FOLDER `
             "$($env:SOLUTION_NAME).zip"
 
-          $packLog = Join-Path `
-            $outputFolder `
+          $diagnosticLog = Join-Path `
+            $env:PACKAGE_OUTPUT_FOLDER `
             "$($env:SOLUTION_NAME)-pack.log"
+
+          pac --log-to-console solution pack `
+            --zipfile "$solutionZip" `
+            --folder "$env:SOURCE_FOLDER" `
+            --packagetype "$env:PACKAGE_TYPE" `
+            --errorlevel Verbose `
+            --log "$diagnosticLog"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "The repository solution could not be packed."
+          }
+
+          "SOLUTION_ZIP=$solutionZip" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+          "DIAGNOSTIC_LOG=$diagnosticLog" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+          "EFFECTIVE_PACKAGE_TYPE=$env:PACKAGE_TYPE" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Authenticate to source environment
+        if: inputs.solution_source_mode == 'Environment'
+        shell: pwsh
+        env:
+          TARGET_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          TARGET_APP_ID: ${{ secrets.pp_app_id }}
+          TARGET_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+          SOURCE_TENANT_ID: ${{ secrets.source_pp_tenant_id }}
+          SOURCE_APP_ID: ${{ secrets.source_pp_app_id }}
+          SOURCE_CLIENT_SECRET: ${{ secrets.source_pp_client_secret }}
+          SOURCE_ENVIRONMENT: ${{ inputs.source_environment }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $tenantId = $env:SOURCE_TENANT_ID
+          $appId = $env:SOURCE_APP_ID
+          $clientSecret = $env:SOURCE_CLIENT_SECRET
+
+          if ([string]::IsNullOrWhiteSpace($tenantId)) {
+            $tenantId = $env:TARGET_TENANT_ID
+          }
+
+          if ([string]::IsNullOrWhiteSpace($appId)) {
+            $appId = $env:TARGET_APP_ID
+          }
+
+          if ([string]::IsNullOrWhiteSpace($clientSecret)) {
+            $clientSecret = $env:TARGET_CLIENT_SECRET
+          }
+
+          pac auth create `
+            --name "GitHub-PP-Source" `
+            --applicationId "$appId" `
+            --clientSecret "$clientSecret" `
+            --tenant "$tenantId" `
+            --environment "$env:SOURCE_ENVIRONMENT"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Authentication to the source environment failed."
+          }
+
+          pac auth who
+
+      - name: Export solution from source environment
+        if: inputs.solution_source_mode == 'Environment'
+        shell: pwsh
+        env:
+          SOLUTION_NAME: ${{ inputs.solution_name }}
+          SOURCE_SOLUTION_NAME: ${{ inputs.source_solution_name }}
+          SOURCE_ENVIRONMENT: ${{ inputs.source_environment }}
+          EXPORT_MANAGED: ${{ inputs.source_export_managed }}
+          EXPORT_ASYNC: ${{ inputs.source_export_async }}
+          EXPORT_INCLUDE: ${{ inputs.source_export_include }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if ([string]::IsNullOrWhiteSpace($env:SOURCE_SOLUTION_NAME)) {
+            $sourceSolutionName = $env:SOLUTION_NAME
+          }
+          else {
+            $sourceSolutionName = $env:SOURCE_SOLUTION_NAME
+          }
+
+          $solutionZip = Join-Path `
+            $env:PACKAGE_OUTPUT_FOLDER `
+            "$($env:SOLUTION_NAME).zip"
+
+          $diagnosticLog = Join-Path `
+            $env:PACKAGE_OUTPUT_FOLDER `
+            "$($env:SOLUTION_NAME)-export.txt"
 
           $arguments = @(
             "--log-to-console",
             "solution",
-            "pack",
-            "--zipfile",
+            "export",
+            "--name",
+            $sourceSolutionName,
+            "--path",
             $solutionZip,
-            "--folder",
-            $env:SOLUTION_SOURCE_FOLDER,
-            "--packagetype",
-            $env:SOLUTION_PACKAGE_TYPE,
-            "--errorlevel",
-            "Verbose",
-            "--log",
-            $packLog
+            "--environment",
+            $env:SOURCE_ENVIRONMENT,
+            "--overwrite",
+            "--max-async-wait-time",
+            $env:MAX_WAIT
           )
+
+          if ($env:EXPORT_MANAGED -eq "true") {
+            $arguments += "--managed"
+            $effectivePackageType = "Managed"
+          }
+          else {
+            $effectivePackageType = "Unmanaged"
+          }
+
+          if ($env:EXPORT_ASYNC -eq "true") {
+            $arguments += "--async"
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:EXPORT_INCLUDE)) {
+            $arguments += @("--include", $env:EXPORT_INCLUDE)
+          }
+
+          @"
+          Source environment: $env:SOURCE_ENVIRONMENT
+          Source solution: $sourceSolutionName
+          Export type: $effectivePackageType
+          "@ | Out-File $diagnosticLog -Encoding utf8
 
           & pac @arguments
 
           if ($LASTEXITCODE -ne 0) {
-            throw "The Power Platform solution could not be packed."
+            throw "The source solution could not be exported."
           }
 
+          "SOLUTION_ZIP=$solutionZip" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+          "DIAGNOSTIC_LOG=$diagnosticLog" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+          "EFFECTIVE_PACKAGE_TYPE=$effectivePackageType" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Resolve package details
+        id: package_details
+        shell: pwsh
+        env:
+          SOLUTION_NAME: ${{ inputs.solution_name }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
           if (
-            -not (
-              Test-Path `
-                -LiteralPath $solutionZip `
-                -PathType Leaf
-            )
+            [string]::IsNullOrWhiteSpace($env:SOLUTION_ZIP) -or
+            -not (Test-Path -LiteralPath $env:SOLUTION_ZIP -PathType Leaf)
           ) {
-            throw "The solution ZIP was not created."
+            throw "The solution package was not created."
           }
 
           $artifactName = `
-            "$($env:SOLUTION_NAME)-$($env:SOLUTION_PACKAGE_TYPE)"
+            "$($env:SOLUTION_NAME)-$($env:EFFECTIVE_PACKAGE_TYPE)"
 
-          "SOLUTION_ZIP=$solutionZip" |
-            Out-File `
-              -FilePath $env:GITHUB_ENV `
-              -Encoding utf8 `
-              -Append
+          Write-Host "Solution package: $env:SOLUTION_ZIP"
+          Write-Host "Package type: $env:EFFECTIVE_PACKAGE_TYPE"
 
-          "solution_zip=$solutionZip" |
-            Out-File `
-              -FilePath $env:GITHUB_OUTPUT `
-              -Encoding utf8 `
-              -Append
+          "solution_zip=$env:SOLUTION_ZIP" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-          "pack_log=$packLog" |
-            Out-File `
-              -FilePath $env:GITHUB_OUTPUT `
-              -Encoding utf8 `
-              -Append
+          "diagnostic_log=$env:DIAGNOSTIC_LOG" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "package_type=$env:EFFECTIVE_PACKAGE_TYPE" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           "artifact_name=$artifactName" |
-            Out-File `
-              -FilePath $env:GITHUB_OUTPUT `
-              -Encoding utf8 `
-              -Append
-
-      # ============================================================
-      # 11. Upload the generated ZIP and pack log
-      # ============================================================
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Upload solution artifact
         if: inputs.upload_solution_artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.pack_solution.outputs.artifact_name }}
-
+          name: ${{ steps.package_details.outputs.artifact_name }}
           path: |
-            ${{ steps.pack_solution.outputs.solution_zip }}
-            ${{ steps.pack_solution.outputs.pack_log }}
-
+            ${{ steps.package_details.outputs.solution_zip }}
+            ${{ steps.package_details.outputs.diagnostic_log }}
           if-no-files-found: error
-
           retention-days: ${{ inputs.artifact_retention_days }}
-
-      # ============================================================
-      # 12. Authenticate directly to the target environment
-      # ============================================================
 
       - name: Authenticate to target environment
         shell: pwsh
@@ -1100,12 +1068,7 @@ jobs:
 
           pac auth who
 
-      # ============================================================
-      # 13. Import the latest solution
-      # ============================================================
-
-      # This runs whether the environment was created or reused.
-      - name: Import project solution
+      - name: Import solution into target environment
         shell: pwsh
         env:
           ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
@@ -1113,7 +1076,10 @@ jobs:
           FORCE_OVERWRITE: ${{ inputs.force_overwrite }}
           PUBLISH_CHANGES: ${{ inputs.publish_changes }}
           ASYNCHRONOUS_IMPORT: ${{ inputs.asynchronous_import }}
-          MAX_ASYNC_WAIT_MINUTES: ${{ inputs.max_async_wait_minutes }}
+          ACTIVATE_PLUGINS: ${{ inputs.activate_plugins }}
+          SKIP_DEPENDENCY_CHECK: ${{ inputs.skip_dependency_check }}
+          SKIP_LOWER_VERSION: ${{ inputs.skip_lower_version }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -1126,7 +1092,7 @@ jobs:
             "--environment",
             $env:ENVIRONMENT_URL,
             "--max-async-wait-time",
-            $env:MAX_ASYNC_WAIT_MINUTES
+            $env:MAX_WAIT
           )
 
           if ($env:FORCE_OVERWRITE -eq "true") {
@@ -1141,11 +1107,19 @@ jobs:
             $arguments += "--async"
           }
 
-          if (
-            -not [string]::IsNullOrWhiteSpace(
-              $env:DEPLOYMENT_SETTINGS_FILE
-            )
-          ) {
+          if ($env:ACTIVATE_PLUGINS -eq "true") {
+            $arguments += "--activate-plugins"
+          }
+
+          if ($env:SKIP_DEPENDENCY_CHECK -eq "true") {
+            $arguments += "--skip-dependency-check"
+          }
+
+          if ($env:SKIP_LOWER_VERSION -eq "true") {
+            $arguments += "--skip-lower-version"
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:DEPLOYMENT_SETTINGS_FILE)) {
             if (
               -not (
                 Test-Path `
@@ -1153,11 +1127,7 @@ jobs:
                   -PathType Leaf
               )
             ) {
-              throw @"
-          Deployment settings file not found:
-
-          $env:DEPLOYMENT_SETTINGS_FILE
-          "@
+              throw "Deployment settings file not found: $env:DEPLOYMENT_SETTINGS_FILE"
             }
 
             $arguments += @(
@@ -1166,12 +1136,8 @@ jobs:
             )
           }
 
-          Write-Host "Importing solution:"
-          Write-Host $env:SOLUTION_ZIP
-
-          Write-Host ""
-          Write-Host "Target environment:"
-          Write-Host $env:ENVIRONMENT_URL
+          Write-Host "Importing: $env:SOLUTION_ZIP"
+          Write-Host "Target: $env:ENVIRONMENT_URL"
 
           & pac @arguments
 
@@ -1179,30 +1145,27 @@ jobs:
             throw @"
           The Power Platform solution could not be imported.
 
-          Review:
-          1. The PAC CLI output above.
-          2. Solution History in the target environment.
-          3. The generated solution ZIP in the workflow artifacts.
+          Review the PAC CLI output, target Solution History and
+          uploaded solution artifact.
           "@
           }
-
-      # ============================================================
-      # 14. Create the GitHub Actions summary
-      # ============================================================
 
       - name: Create workspace summary
         shell: pwsh
         env:
           PROJECT_KEY: ${{ inputs.project_key }}
           DEVELOPER_UPN: ${{ inputs.developer_upn }}
+          SOURCE_MODE: ${{ inputs.solution_source_mode }}
+          SOURCE_ENVIRONMENT: ${{ inputs.source_environment }}
+          SOURCE_SOLUTION_NAME: ${{ inputs.source_solution_name }}
           ENVIRONMENT_EXISTED: ${{ steps.find_environment.outputs.exists }}
           ENVIRONMENT_NAME: ${{ steps.workspace_names.outputs.environment_name }}
           ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
           ENVIRONMENT_TYPE: ${{ inputs.environment_type }}
           SOLUTION_NAME: ${{ inputs.solution_name }}
-          SOLUTION_PACKAGE_TYPE: ${{ inputs.solution_package_type }}
+          PACKAGE_TYPE: ${{ steps.package_details.outputs.package_type }}
           SOURCE_REF: ${{ inputs.source_ref }}
-          ARTIFACT_NAME: ${{ steps.pack_solution.outputs.artifact_name }}
+          ARTIFACT_NAME: ${{ steps.package_details.outputs.artifact_name }}
           ARTIFACT_UPLOADED: ${{ inputs.upload_solution_artifact }}
           NEXT_STEP_MESSAGE: ${{ inputs.next_step_message }}
         run: |
@@ -1215,13 +1178,27 @@ jobs:
             $environmentAction = "Created new environment"
           }
 
-          if ($env:ARTIFACT_UPLOADED -eq "true") {
-            $artifactLine = `
-              "**Solution artifact:** $env:ARTIFACT_NAME"
+          if ($env:SOURCE_MODE -eq "Environment") {
+            if ([string]::IsNullOrWhiteSpace($env:SOURCE_SOLUTION_NAME)) {
+              $sourceSolution = $env:SOLUTION_NAME
+            }
+            else {
+              $sourceSolution = $env:SOURCE_SOLUTION_NAME
+            }
+
+            $sourceLine = `
+              "**Source:** $sourceSolution from $env:SOURCE_ENVIRONMENT"
           }
           else {
-            $artifactLine = `
-              "**Solution artifact:** Not uploaded"
+            $sourceLine = `
+              "**Source:** Repository ref $env:SOURCE_REF"
+          }
+
+          if ($env:ARTIFACT_UPLOADED -eq "true") {
+            $artifactLine = "**Artifact:** $env:ARTIFACT_NAME"
+          }
+          else {
+            $artifactLine = "**Artifact:** Not uploaded"
           }
 
           @"
@@ -1231,19 +1208,19 @@ jobs:
 
           **Developer:** $env:DEVELOPER_UPN
 
-          **Environment:** $env:ENVIRONMENT_NAME
+          $sourceLine
 
-          **Environment handling:** $environmentAction
+          **Target environment:** $env:ENVIRONMENT_NAME
 
-          **Environment type:** $env:ENVIRONMENT_TYPE
+          **Target handling:** $environmentAction
 
-          **Environment URL:** $env:ENVIRONMENT_URL
+          **Target type:** $env:ENVIRONMENT_TYPE
+
+          **Target URL:** $env:ENVIRONMENT_URL
 
           **Solution:** $env:SOLUTION_NAME
 
-          **Solution type:** $env:SOLUTION_PACKAGE_TYPE
-
-          **Source branch:** $env:SOURCE_REF
+          **Package type:** $env:PACKAGE_TYPE
 
           $artifactLine
 
