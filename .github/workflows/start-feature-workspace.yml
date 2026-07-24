@@ -698,6 +698,7 @@ jobs:
           ENVIRONMENT_NAME: ${{ steps.names.outputs.environment_name }}
           ENVIRONMENT_DOMAIN: ${{ steps.names.outputs.environment_domain }}
           ENVIRONMENT_TYPE: ${{ inputs.target_environment_type }}
+          DEVELOPER_UPN: ${{ inputs.developer_upn }}
           REGION: ${{ inputs.target_environment_region }}
           CURRENCY: ${{ inputs.target_environment_currency }}
           LANGUAGE: ${{ inputs.target_environment_language }}
@@ -718,6 +719,17 @@ jobs:
             "--domain", $env:ENVIRONMENT_DOMAIN,
             "--max-async-wait-time", $env:MAX_WAIT
           )
+
+          if ($env:ENVIRONMENT_TYPE -eq "Developer") {
+            if ([string]::IsNullOrWhiteSpace($env:DEVELOPER_UPN)) {
+              throw "developer_upn is required when creating a Developer environment."
+            }
+
+            # Developer environments are owner-specific. Without --user,
+            # PAC tries to use the authenticated service principal as the
+            # environment owner, but a service principal is not a user.
+            $arguments += @("--user", $env:DEVELOPER_UPN)
+          }
 
           if (-not [string]::IsNullOrWhiteSpace($env:TEMPLATES)) {
             $arguments += @("--templates", $env:TEMPLATES)
