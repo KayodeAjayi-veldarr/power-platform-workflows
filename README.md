@@ -36,8 +36,7 @@ project-workflows-template/.github/workflows/
 └── deploy-solution.yml
 ```
 
-No environment name, URL, ID or Dataverse domain is hardcoded in the project
-template.
+
 
 ---
 
