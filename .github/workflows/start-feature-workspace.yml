@@ -635,12 +635,23 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           function Get-Value($Object, [string[]]$Names) {
+            if ($null -eq $Object) {
+              return ""
+            }
+
+            $properties = $Object.PSObject.Properties
+            if ($null -eq $properties) {
+              return ""
+            }
+
             foreach ($name in $Names) {
-              $property = $Object.PSObject.Properties[$name]
-              if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+              $property = $properties[$name]
+              if ($null -ne $property -and
+                  -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
                 return [string]$property.Value
               }
             }
+
             return ""
           }
 
@@ -758,12 +769,23 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           function Get-Value($Object, [string[]]$Names) {
+            if ($null -eq $Object) {
+              return ""
+            }
+
+            $properties = $Object.PSObject.Properties
+            if ($null -eq $properties) {
+              return ""
+            }
+
             foreach ($name in $Names) {
-              $property = $Object.PSObject.Properties[$name]
-              if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+              $property = $properties[$name]
+              if ($null -ne $property -and
+                  -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
                 return [string]$property.Value
               }
             }
+
             return ""
           }
 
@@ -963,12 +985,23 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           function Get-Value($Object, [string[]]$Names) {
+            if ($null -eq $Object) {
+              return ""
+            }
+
+            $properties = $Object.PSObject.Properties
+            if ($null -eq $properties) {
+              return ""
+            }
+
             foreach ($name in $Names) {
-              $property = $Object.PSObject.Properties[$name]
-              if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+              $property = $properties[$name]
+              if ($null -ne $property -and
+                  -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
                 return [string]$property.Value
               }
             }
+
             return ""
           }
 
@@ -977,14 +1010,34 @@ jobs:
             throw "Unable to list solutions in the developer environment."
           }
 
-          $parsed = ($raw -join "`n") | ConvertFrom-Json
-          $items = if ($null -ne $parsed.value) { @($parsed.value) } else { @($parsed) }
+          $jsonText = $raw -join "`n"
+          if ([string]::IsNullOrWhiteSpace($jsonText)) {
+            throw "PAC returned no solution-list JSON."
+          }
+
+          $parsed = $jsonText | ConvertFrom-Json
+
+          if ($parsed -is [System.Array]) {
+            $items = @($parsed)
+          }
+          elseif ($null -ne $parsed.PSObject.Properties["value"]) {
+            $items = @($parsed.value)
+          }
+          else {
+            $items = @($parsed)
+          }
+
+          $items = @($items | Where-Object { $null -ne $_ })
 
           $match = $null
           foreach ($item in $items) {
             $uniqueName = Get-Value $item @(
-              "Unique Name", "UniqueName", "SolutionUniqueName", "Name"
+              "SolutionUniqueName",
+              "UniqueName",
+              "Unique Name",
+              "Name"
             )
+
             if ($uniqueName -ceq $env:SOLUTION_NAME) {
               $match = $item
               break
@@ -995,7 +1048,7 @@ jobs:
             throw "The imported solution could not be found after import."
           }
 
-          $solutionId = Get-Value $match @("Solution Id", "SolutionId", "Id")
+          $solutionId = Get-Value $match @("Id", "SolutionId", "Solution Id")
           $solutionVersion = Get-Value $match @("Version", "SolutionVersion")
 
           "solution_id=$solutionId" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
