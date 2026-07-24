@@ -716,8 +716,7 @@ jobs:
             "--currency", $env:CURRENCY,
             "--language", $env:LANGUAGE,
             "--domain", $env:ENVIRONMENT_DOMAIN,
-            "--max-async-wait-time", $env:MAX_WAIT,
-            "--json"
+            "--max-async-wait-time", $env:MAX_WAIT
           )
 
           if (-not [string]::IsNullOrWhiteSpace($env:TEMPLATES)) {
