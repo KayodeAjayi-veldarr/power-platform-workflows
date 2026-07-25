@@ -1,4 +1,4 @@
-# Power Platform GitHub Workflows v12
+# Power Platform GitHub Workflows v15
 
 This repository contains four reusable GitHub Actions workflows:
 
@@ -14,7 +14,7 @@ Each Power Platform project has four small caller workflows with the same names.
 The callers contain the project-specific settings and invoke the shared reusable
 workflows in this repository.
 
-## Project setup
+## Project workflow setup
 
 Use the files in:
 
@@ -22,16 +22,8 @@ Use the files in:
 project-workflows-template/
 ```
 
-Open `PROJECT-DETAILS.txt` and complete the labelled values, including:
-
-```text
-Project key: <short project identifier>
-Solution: <logical name of the solution>
-Solution project folder: <folder containing the solution project>
-Solution source folder: <folder containing the unpacked solution files>
-Default developer alias: <short developer identifier>
-Default developer UPN: <developer Microsoft 365 email address>
-```
+Open `PROJECT-DETAILS.txt` and complete the required values. The two solution
+folder fields may remain blank.
 
 Then run:
 
@@ -39,16 +31,29 @@ Then run:
 .\project-workflows-template\Install-ProjectWorkflows.ps1
 ```
 
-The installer writes the finished caller workflows into the selected project's
-`.github/workflows` folder.
+The installer writes only the finished caller workflows into the selected
+project repository's `.github/workflows` folder. It does not copy the template
+support files into the project repository.
+
+## Repository setup
+
+Follow the central checklist at:
+
+```text
+REPOSITORY-SETTINGS.txt
+```
+
+It is stored at the root of this shared workflow repository because it is a
+central setup guide. It should not be copied into every project repository.
+
+The checklist covers the settings that must be applied to the shared repository,
+the GitHub organisation, and each project repository.
 
 ## GitHub configuration
 
-No project-level GitHub Actions variables are required for the project key,
-solution name, solution folders, developer defaults, region, currency, language
-or Solution Checker settings.
+No project-level GitHub Actions variables are required.
 
-The project repository must have access to these secret names:
+Each project repository must have access to these secret names:
 
 ```text
 PP_TENANT_ID

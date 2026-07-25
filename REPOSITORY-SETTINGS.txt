@@ -1,0 +1,145 @@
+POWER PLATFORM PROJECT REPOSITORY SETTINGS
+==========================================
+
+Apply these settings to each project repository that uses the shared Power
+Platform workflows.
+
+No GitHub Actions variables are required.
+Do not place secret values in this file or commit them to the repository.
+
+----------------------------------------------------------------------
+1. PROJECT REPOSITORY: ACTIONS PERMISSIONS
+----------------------------------------------------------------------
+
+Open the project repository and go to:
+
+    Settings
+    → Actions
+    → General
+
+GitHub Actions must be enabled.
+
+The repository policy must allow these actions and reusable workflows:
+
+    actions/checkout@v4
+    actions/upload-artifact@v4
+    microsoft/powerplatform-actions/actions-install@v1
+    KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/*@main
+
+When the organisation uses a selected-actions policy, allow GitHub-owned
+actions, the Microsoft Power Platform action above, and reusable workflows from
+KayodeAjayi-Veldarr/power-platform-workflows.
+
+Under Workflow permissions, select:
+
+    Read and write permissions
+
+Enable:
+
+    Allow GitHub Actions to create and approve pull requests
+
+This is required because Commit Feature Changes can create a pull request after
+committing the exported solution changes.
+
+----------------------------------------------------------------------
+2. SHARED WORKFLOW REPOSITORY: ACCESS
+----------------------------------------------------------------------
+
+Open:
+
+    KayodeAjayi-Veldarr/power-platform-workflows
+    → Settings
+    → Actions
+    → General
+
+Under Access, select:
+
+    Accessible from repositories in the KayodeAjayi-Veldarr organisation
+
+This allows private project repositories in the organisation to call the four
+reusable workflows.
+
+----------------------------------------------------------------------
+3. ORGANISATION SECRETS
+----------------------------------------------------------------------
+
+Open the GitHub organisation and go to:
+
+    Settings
+    → Secrets and variables
+    → Actions
+    → Secrets
+
+The following organisation secrets must already exist:
+
+    PP_TENANT_ID
+    PP_APP_ID
+    PP_CLIENT_SECRET
+
+For each secret, confirm that Repository access includes the project repository.
+Do not create duplicate repository secrets when the organisation secrets already
+exist and the project has access.
+
+The workflows do not require project-level Actions variables.
+
+----------------------------------------------------------------------
+4. OPTIONAL SOURCE CREDENTIALS
+----------------------------------------------------------------------
+
+Only configure these secrets when the source environment uses a different
+Microsoft Entra application:
+
+    SOURCE_PP_TENANT_ID
+    SOURCE_PP_APP_ID
+    SOURCE_PP_CLIENT_SECRET
+
+After granting the project repository access to them, uncomment the matching
+secret mappings in:
+
+    .github/workflows/manage-feature-workspace.yml
+
+----------------------------------------------------------------------
+5. DEFAULT BRANCH
+----------------------------------------------------------------------
+
+The repository default branch must match the Base branch value in:
+
+    PROJECT-DETAILS.txt
+
+The supplied configuration uses:
+
+    main
+
+Commit the four generated caller workflows to that branch.
+
+----------------------------------------------------------------------
+6. REQUIRED ACCESS OUTSIDE GITHUB
+----------------------------------------------------------------------
+
+The Microsoft Entra application represented by the three PP secrets must:
+
+    Have a valid, unexpired client secret
+    Be able to access the required Power Platform environments
+    Exist as an application user where Dataverse access is required
+    Have the Dataverse security role needed for import and export operations
+    Have the approved tenant-level permissions needed to create or delete
+    developer and validation environments
+
+The current workflow configuration uses System Administrator for the automation
+and developer application-user role assignments.
+
+----------------------------------------------------------------------
+7. FINAL CHECK
+----------------------------------------------------------------------
+
+    [ ] GitHub Actions is enabled in the project repository
+    [ ] Required actions and reusable workflows are allowed
+    [ ] Workflow permissions are set to Read and write permissions
+    [ ] GitHub Actions can create pull requests
+    [ ] The shared workflow repository is accessible to the organisation
+    [ ] The project repository can access PP_TENANT_ID
+    [ ] The project repository can access PP_APP_ID
+    [ ] The project repository can access PP_CLIENT_SECRET
+    [ ] No project-level Actions variables have been created
+    [ ] The default branch matches PROJECT-DETAILS.txt
+    [ ] The Microsoft Entra application can access the required environments

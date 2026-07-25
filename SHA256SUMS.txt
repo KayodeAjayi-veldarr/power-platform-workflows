@@ -1,0 +1,14 @@
+7376bee5c4448eb3ae6628a28e5d3c4639bd0bda4f84cc9cff34b8fd75f45f9a  ./.github/workflows/commit-feature-changes.yml
+09682310d6bdc30a2630bdeb428be4a9bbedf9d252b515d8a67c1c48b033e86b  ./.github/workflows/deploy-solution.yml
+9bb70c28001beffe5c3aea289d69015a92fe46b43c447f1af3042c7f185f9187  ./.github/workflows/manage-feature-workspace.yml
+fbff7f4b705c99f5d48dd96129258bc482c3bbf45cfc128a72d83c22761059d2  ./.github/workflows/validate-pull-request.yml
+efb1a8bcddc772293143bfa510577c50007205dbf3b5db4347bd3ab2bd0e5c52  ./README.md
+c86df10c64ad2f3c4dbc5e8668385dfe0bccb33057c2d959cdf5e36e523413c2  ./REPOSITORY-SETTINGS.txt
+7fcc0e396034df21d39c66cc57c43e8555071c5017ae054a4e694f57e6969366  ./project-workflows-template/.github/workflows/commit-feature-changes.yml
+18d5c353747fbe0d89236ab8fec07869db16955446257afa4e906b7549e8ab01  ./project-workflows-template/.github/workflows/deploy-solution.yml
+2a7aac564c62f9944b2cfcf13f9986b89e833e38cf14c3e9c250f7b0faab6d07  ./project-workflows-template/.github/workflows/manage-feature-workspace.yml
+faede82be536ef5526845fcc687d01f28046fb5e5725d8eb3dc9169f286b8390  ./project-workflows-template/.github/workflows/validate-pull-request.yml
+0da6511f7d4170b21bd042cd60a933d199f2679ca712da8ad2e8853de4f36ccb  ./project-workflows-template/Install-ProjectWorkflows.ps1
+fe46c1ae8d8e2fb73dfa0a9cc5d7f6688f64e8f610d7e767950f53e5419ea19b  ./project-workflows-template/PROJECT-DETAILS.txt
+d17eb44cfce100b9037e5b255b52fb330409127f5085811f79763f2954b5a8fd  ./project-workflows-template/README.md
+d1b78a8b9b9fd0afc6ba9ffffdd0a2bb88b2d13675bd52225e58699ff885d688  ./validation-report.json

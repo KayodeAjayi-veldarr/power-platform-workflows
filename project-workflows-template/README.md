@@ -1,46 +1,32 @@
-# Project Workflow Files v12
+# Project Workflow Files v15
 
-This pack creates the four small caller workflows used by a Power Platform
-project:
+This folder is used to generate the four caller workflows for a Power Platform
+project.
 
-```text
-.github/workflows/
-├── manage-feature-workspace.yml
-├── commit-feature-changes.yml
-├── validate-pull-request.yml
-└── deploy-solution.yml
-```
+`PROJECT-DETAILS.txt` is the only file you need to edit.
 
-## Setup
-
-Open `PROJECT-DETAILS.txt` and replace the values written inside angle brackets.
-The important fields are shown in a simple format:
+Complete these five required values:
 
 ```text
-Project key: <short project identifier>
-Solution: <logical name of the solution>
-Solution project folder: <folder containing the solution project>
-Solution source folder: <folder containing the unpacked solution files>
-Default developer alias: <short developer identifier>
-Default developer UPN: <developer Microsoft 365 email address>
+Destination repository
+Project key
+Solution
+Default developer alias
+Default developer UPN
 ```
 
-You can leave the two solution folder values blank. The installer will then use:
+The two solution folder fields can remain blank. The installer will use:
 
 ```text
 power-platform/<Solution>
 power-platform/<Solution>/src
 ```
 
-After completing the file, run:
+Run the installer from this template folder:
 
 ```powershell
 .\Install-ProjectWorkflows.ps1
 ```
-
-The script reads `PROJECT-DETAILS.txt`, replaces the internal template tokens
-and writes the finished workflow files into the project's `.github/workflows`
-folder.
 
 Use `-Force` only when replacing existing workflow files:
 
@@ -48,18 +34,15 @@ Use `-Force` only when replacing existing workflow files:
 .\Install-ProjectWorkflows.ps1 -Force
 ```
 
-A different project details file can also be supplied:
+The installer writes only the four generated YAML files to the destination
+repository's `.github/workflows` folder. It does not copy `PROJECT-DETAILS.txt`,
+the installer, or this README into the project repository.
 
-```powershell
-.\Install-ProjectWorkflows.ps1 `
-  -ConfigurationFile "C:\Setup\another-project.txt"
-```
+Repository settings are intentionally not included in this project template.
+Use the central `REPOSITORY-SETTINGS.txt` file in the shared
+`power-platform-workflows` repository when setting up each project repository.
 
-## GitHub configuration
-
-No project-level GitHub Actions variables are required.
-
-The project repository must have access to these secrets:
+The project repository must have access to these GitHub secrets:
 
 ```text
 PP_TENANT_ID
@@ -67,29 +50,4 @@ PP_APP_ID
 PP_CLIENT_SECRET
 ```
 
-They can be organisation secrets or repository secrets. Do not place secret
-values in `PROJECT-DETAILS.txt` or the workflow files.
-
-## Workflow lifecycle
-
-```text
-Create a feature branch
-        ↓
-Manage Feature Workspace: PrepareOrReuse
-        ↓
-Build and test in the developer environment
-        ↓
-Commit Feature Changes
-        ↓
-Open or update a pull request
-        ↓
-Validate Power Platform Pull Request
-        ↓
-Merge into main
-        ↓
-Deploy Solution from Git
-```
-
-To delete an old developer environment, run `Manage Feature Workspace`, select
-`DeleteEnvironment`, and enter the exact confirmation value requested by the
-workflow.
+No project-level GitHub Actions variables are required.

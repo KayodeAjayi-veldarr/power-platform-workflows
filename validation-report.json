@@ -1,0 +1,25 @@
+{
+  "version": 15,
+  "files": {
+    "project-workflows-template/.github/workflows/commit-feature-changes.yml": "valid",
+    "project-workflows-template/.github/workflows/deploy-solution.yml": "valid",
+    "project-workflows-template/.github/workflows/manage-feature-workspace.yml": "valid",
+    "project-workflows-template/.github/workflows/validate-pull-request.yml": "valid",
+    ".github/workflows/commit-feature-changes.yml": "valid",
+    ".github/workflows/deploy-solution.yml": "valid",
+    ".github/workflows/manage-feature-workspace.yml": "valid",
+    ".github/workflows/validate-pull-request.yml": "valid"
+  },
+  "checks": {
+    "project_template_uses_vars_context": false,
+    "project_details_has_labelled_placeholders": true,
+    "repository_settings_location": "repository root",
+    "repository_settings_present_in_project_template": false,
+    "repository_settings_contains_secret_values": false,
+    "required_project_secrets": [
+      "PP_TENANT_ID",
+      "PP_APP_ID",
+      "PP_CLIENT_SECRET"
+    ]
+  }
+}
