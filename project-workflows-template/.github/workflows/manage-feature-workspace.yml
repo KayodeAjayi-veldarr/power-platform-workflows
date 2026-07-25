@@ -144,7 +144,9 @@ jobs:
       solution_project_folder: ${{ inputs.solution_folder }}
       solution_source_folder: ${{ format('{0}/src', inputs.solution_folder) }}
       solution_package_type: Unmanaged
-      deployment_settings_file: "__DEPLOYMENT_SETTINGS_FILE__"
+      auto_bind_connection_references: false
+      require_connection_bindings: false
+      provision_dataverse_connections: false
 
       commit_baseline_to_branch: ${{ inputs.commit_baseline_to_branch }}
       baseline_commit_message: ${{ inputs.baseline_commit_message }}
@@ -171,6 +173,7 @@ jobs:
       force_overwrite: true
       publish_changes: true
       asynchronous_import: false
+      activate_plugins: false
 
       deletion_confirmation: ${{ inputs.deletion_confirmation }}
       expected_environment_name_prefix: "__PROJECT_KEY__-"

@@ -1,4 +1,4 @@
-# Power Platform GitHub Workflows v19
+# Power Platform GitHub Workflows v26
 
 This repository contains four reusable GitHub Actions workflows:
 
@@ -10,70 +10,81 @@ This repository contains four reusable GitHub Actions workflows:
 └── deploy-solution.yml
 ```
 
-Each Power Platform project has four small caller workflows with the same names.
-The callers contain the project settings and invoke the shared reusable workflows.
+The project repository contains four small caller workflows generated from
+`project-workflows-template`.
 
-## Project workflow setup
+## What changed in v26
 
-Use the files in:
+### Conservative connection handling
+
+The generated project workflows no longer create connections, select existing
+connections, generate deployment mappings, or stop an import because a
+connection reference is unresolved.
+
+The standard import behaviour is now:
 
 ```text
-project-workflows-template/
+Create or resolve environment
+  → import the exact solution package without a deployment-settings file
+  → do not request flow or plug-in activation
+  → allow unresolved connection references and inactive flows
+  → record the connection references in the workflow artifact for manual setup
 ```
 
-Open `PROJECT-DETAILS.txt`, complete the required values, and run:
+This is the safer default for dynamically created environments because the
+workflow does not guess which identity or connection should be used.
+
+After import, a maker or administrator can create the required connections,
+update the connection references, and turn on the affected flows.
+
+The reusable workflows still contain the advanced automatic binding capability,
+but it is disabled by default and the generated caller workflows do not expose
+it. It should be enabled only where connection identities and mapping rules have
+been deliberately designed.
+
+### Exact packages and build-environment releases
+
+Source and feature exports are still saved before unpacking:
+
+```text
+<solution_folder>/package/source/
+├── <solution>_unmanaged.zip
+└── <solution>_unmanaged.zip.sha256
+```
+
+Managed downstream releases still use the build-environment pattern:
+
+```text
+Git source
+  → pack unmanaged build input
+  → import into the build environment
+  → export an exact managed ZIP
+  → commit the managed ZIP and SHA256
+  → import that exact managed ZIP into the target environment
+```
+
+The managed release is stored under:
+
+```text
+<solution_folder>/package/release/<solution>_managed.zip
+```
+
+### Feature workspace names
+
+When no workspace environment name is entered, the generated name includes the
+feature branch. Different feature branches therefore receive different default
+environment names.
+
+## Project setup
+
+Populate `project-workflows-template/PROJECT-DETAILS.txt`, then run:
 
 ```powershell
-.\project-workflows-template\Install-ProjectWorkflows.ps1
+.\project-workflows-template\Install-ProjectWorkflows.ps1 -Force
 ```
 
-The installer writes only the completed caller workflows into the selected
-project repository's `.github/workflows` folder.
-
-## Selecting a solution folder
-
-The solution logical name remains a project setting, but the repository folder is
-now a workflow input. This allows the same solution to be exported, committed,
-validated, or deployed from different repository folders.
-
-The default folder comes from `PROJECT-DETAILS.txt`. Each manual workflow run can
-override it. The source folder is always derived as `<solution_folder>/src`.
-Automatic pull request validation detects the changed solution folder when one
-folder is changed.
-
-## Generated deployment ZIP in the project repository
-
-`Deploy Solution from Git` now packs the solution automatically, uploads the
-exact ZIP as a GitHub Actions artifact, and commits the same ZIP into the project
-repository before import.
-
-The default project caller stores the package under the selected solution folder:
-
-```text
-<solution_folder>/package/<solution_name>.zip
-```
-
-Managed packages use:
-
-```text
-<solution_folder>/package/<solution_name>_managed.zip
-```
-
-The paths are generated from workflow inputs. No solution name or project folder
-is hardcoded in the shared workflow. Because the workflow pushes the ZIP back to
-the project repository, the deployment caller and reusable workflow require
-`contents: write`.
-
-## Repository setup
-
-Follow the central checklist at:
-
-```text
-REPOSITORY-SETTINGS.txt
-```
-
-No project-level GitHub Actions variables are required. Each project repository
-must have access to these secret names:
+No project-level GitHub Actions variables are required. The project repository
+must have access to:
 
 ```text
 PP_TENANT_ID
@@ -81,50 +92,24 @@ PP_APP_ID
 PP_CLIENT_SECRET
 ```
 
-Organisation secrets can be used when several projects share the same Microsoft
-Entra application. Make sure each project repository is included in the secret
-access policy.
+For managed releases, enter a clean build environment in the deployment form or
+set `Default build environment` in `PROJECT-DETAILS.txt`.
 
-## Lifecycle
+## Normal lifecycle
 
 ```text
 Create feature branch
-        ↓
-Manage Feature Workspace: PrepareOrReuse
-        ↓
-Build and publish changes
-        ↓
-Commit Feature Changes
-        ↓
-Open or update pull request
-        ↓
-Validate Power Platform Pull Request
-        ↓
-Merge into main
-        ↓
-Deploy Solution from Git
+  → prepare feature workspace
+  → exact source ZIP committed immediately
+  → solution imported with connection references left for manual setup
+  → make changes
+  → exact feature export and unpacked source committed
+  → pull request validation in a clean temporary environment
+  → merge to main
+  → build managed release in build environment
+  → deploy exact managed release to target
+  → configure target connections and enable affected flows when required
 ```
 
-`Manage Feature Workspace` also supports deleting an old developer environment
-using the exact confirmation value requested by the workflow.
-
-
-## Azure Boards work item linking
-
-Connect each GitHub project repository to the correct Azure Boards project using the Azure Boards GitHub app. After the connection is active, enter one or more work item IDs in the **Commit Feature Changes** workflow. The workflow adds the required `AB#<id>` references to the Git commit message and pull request description.
-
-Examples:
-
-```text
-123
-123,456
-AB#123 AB#456
-```
-
-The resulting commit message will look like:
-
-```text
-Update chess move validation AB#123 AB#456
-```
-
-The workflow only creates links. It does not automatically change the state of a work item. To transition a work item, use Azure Boards supported wording such as `Fixed AB#123` deliberately.
+Azure Boards linking remains available through `AB#<work-item-id>` references in
+commit messages.

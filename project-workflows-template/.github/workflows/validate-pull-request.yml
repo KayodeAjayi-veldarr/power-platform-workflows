@@ -199,8 +199,6 @@ jobs:
       solution_name: "__SOLUTION_NAME__"
       solution_source_folder: ${{ format('{0}/src', needs.resolve_solution_folder.outputs.solution_folder) }}
       solution_package_type: Unmanaged
-      deployment_settings_file: "__DEPLOYMENT_SETTINGS_FILE__"
-
       run_solution_checker: >-
         ${{ github.event_name != 'workflow_dispatch' ||
         inputs.run_solution_checker }}

@@ -303,7 +303,7 @@ jobs:
             throw "Authentication to the developer environment failed."
           }
 
-      - name: Export current feature solution
+      - name: Export exact current feature solution
         id: export
         shell: pwsh
         env:
@@ -318,34 +318,71 @@ jobs:
 
           $artifactFolder = Join-Path $env:RUNNER_TEMP "power-platform-feature-commit"
           New-Item -ItemType Directory -Path $artifactFolder -Force | Out-Null
-
-          $solutionZip = Join-Path $artifactFolder "$($env:SOLUTION_NAME)-environment.zip"
+          $suffix = if ($env:EXPORT_MANAGED -eq "true") { "_managed" } else { "_unmanaged" }
+          $solutionZip = Join-Path $artifactFolder "$($env:SOLUTION_NAME)$suffix.zip"
+          $exportLog = Join-Path $artifactFolder "solution-export.log"
 
           $arguments = @(
             "solution", "export",
             "--environment", $env:ENVIRONMENT_URL,
             "--name", $env:SOLUTION_NAME,
             "--path", $solutionZip,
-            "--overwrite",
-            "--max-async-wait-time", $env:MAX_WAIT
+            "--overwrite"
           )
-
           if ($env:EXPORT_MANAGED -eq "true") { $arguments += "--managed" }
-          if ($env:EXPORT_ASYNC -eq "true") { $arguments += "--async" }
+          if ($env:EXPORT_ASYNC -eq "true") {
+            $arguments += "--async"
+            $arguments += @("--max-async-wait-time", $env:MAX_WAIT)
+          }
           if (-not [string]::IsNullOrWhiteSpace($env:EXPORT_INCLUDE)) {
             $arguments += @("--include", $env:EXPORT_INCLUDE)
           }
 
-          & pac @arguments
-          if ($LASTEXITCODE -ne 0) {
-            throw "The feature solution export failed."
-          }
+          $output = & pac @arguments 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | Tee-Object -FilePath $exportLog | Write-Host
+          if ($exitCode -ne 0) { throw "The feature solution export failed." }
+          if (-not (Test-Path -LiteralPath $solutionZip -PathType Leaf)) { throw "The feature solution ZIP was not created." }
 
+          $hash = (Get-FileHash -LiteralPath $solutionZip -Algorithm SHA256).Hash.ToLowerInvariant()
           $artifactName = "$($env:SOLUTION_NAME)-feature-changes-${{ github.run_number }}"
-
           "solution_zip=$solutionZip" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "solution_hash=$hash" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "artifact_folder=$artifactFolder" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "artifact_name=$artifactName" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Commit exact feature export immediately
+        id: commit_exact_package
+        if: inputs.commit_changes && inputs.push_changes
+        shell: pwsh
+        env:
+          BRANCH_REF: ${{ inputs.branch_ref }}
+          SOLUTION_NAME: ${{ inputs.solution_name }}
+          SOLUTION_PROJECT_FOLDER: ${{ inputs.solution_project_folder }}
+          SOLUTION_ZIP: ${{ steps.export.outputs.solution_zip }}
+          SOLUTION_HASH: ${{ steps.export.outputs.solution_hash }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $packageFolder = Join-Path $env:SOLUTION_PROJECT_FOLDER "package/source"
+          New-Item -ItemType Directory -Path $packageFolder -Force | Out-Null
+          $suffix = if ($env:SOLUTION_ZIP -match '_managed\.zip$') { "_managed" } else { "_unmanaged" }
+          $repositoryZip = Join-Path $packageFolder "$($env:SOLUTION_NAME)$suffix.zip"
+          $hashFile = "$repositoryZip.sha256"
+          Copy-Item -LiteralPath $env:SOLUTION_ZIP -Destination $repositoryZip -Force
+          "$($env:SOLUTION_HASH)  $([System.IO.Path]::GetFileName($repositoryZip))" | Set-Content -LiteralPath $hashFile -Encoding utf8
+          $relativeZip = [System.IO.Path]::GetRelativePath($env:GITHUB_WORKSPACE,$repositoryZip).Replace('\','/')
+          $relativeHash = [System.IO.Path]::GetRelativePath($env:GITHUB_WORKSPACE,$hashFile).Replace('\','/')
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f -- $relativeZip $relativeHash
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "chore: store exact $($env:SOLUTION_NAME) feature export [skip ci]"
+            if ($LASTEXITCODE -ne 0) { throw "The exact feature-package commit failed." }
+            git push origin "HEAD:$env:BRANCH_REF"
+            if ($LASTEXITCODE -ne 0) { throw "The exact feature package could not be pushed." }
+          }
+          "repository_zip=$relativeZip" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Unpack current feature solution
         shell: pwsh
@@ -644,6 +681,8 @@ jobs:
           COMPARE_URL: ${{ steps.links.outputs.compare_url }}
           PR_URL: ${{ steps.pull_request.outputs.pull_request_url }}
           SOLUTION_VERSION: ${{ steps.solution_details.outputs.solution_version }}
+          SOURCE_PACKAGE: ${{ steps.commit_exact_package.outputs.repository_zip }}
+          SOURCE_HASH: ${{ steps.export.outputs.solution_hash }}
         run: |
           $pullRequestLine = if ([string]::IsNullOrWhiteSpace($env:PR_URL)) {
             "[Open comparison]($env:COMPARE_URL)"
@@ -664,6 +703,10 @@ jobs:
           **Commit:** ``$env:COMMIT_SHA``
 
           **Solution version:** ``$env:SOLUTION_VERSION``
+
+          **Exact exported ZIP:** ``$env:SOURCE_PACKAGE``
+
+          **Export SHA256:** ``$env:SOURCE_HASH``
 
           $pullRequestLine
           "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

@@ -997,9 +997,7 @@ jobs:
             "--path",
             $env:SOLUTION_ZIP,
             "--environment",
-            $env:ENVIRONMENT_URL,
-            "--max-async-wait-time",
-            $env:MAX_WAIT
+            $env:ENVIRONMENT_URL
           )
 
           if ($env:FORCE_OVERWRITE -eq "true") {
@@ -1012,6 +1010,7 @@ jobs:
 
           if ($env:ASYNC_IMPORT -eq "true") {
             $arguments += "--async"
+            $arguments += @("--max-async-wait-time", $env:MAX_WAIT)
           }
 
           if (-not [string]::IsNullOrWhiteSpace($env:SETTINGS_FILE)) {

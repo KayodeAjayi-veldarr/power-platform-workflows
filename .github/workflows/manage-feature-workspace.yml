@@ -89,8 +89,26 @@ on:
         default: Unmanaged
         type: string
 
-      deployment_settings_file:
-        description: Optional deployment settings JSON path
+      auto_bind_connection_references:
+        description: Advanced opt-in connection binding. Disabled by default for predictable imports
+        required: false
+        default: false
+        type: boolean
+
+      require_connection_bindings:
+        description: Fail when connection references cannot be bound automatically
+        required: false
+        default: false
+        type: boolean
+
+      provision_dataverse_connections:
+        description: Advanced opt-in Dataverse connection provisioning
+        required: false
+        default: false
+        type: boolean
+
+      dataverse_connection_name:
+        description: Optional fixed name for the automatically provisioned Dataverse connection
         required: false
         default: ""
         type: string
@@ -547,7 +565,7 @@ jobs:
             throw "Authentication to the source environment failed."
           }
 
-      - name: Export baseline solution
+      - name: Export exact baseline solution
         id: export_baseline
         shell: pwsh
         env:
@@ -563,38 +581,95 @@ jobs:
           $artifactFolder = Join-Path $env:RUNNER_TEMP "power-platform-feature-start"
           New-Item -ItemType Directory -Path $artifactFolder -Force | Out-Null
 
-          $sourceZip = Join-Path $artifactFolder "$($env:SOURCE_SOLUTION_NAME)-source.zip"
+          $suffix = if ($env:EXPORT_MANAGED -eq "true") { "_managed" } else { "_unmanaged" }
+          $sourceZip = Join-Path $artifactFolder "$($env:SOURCE_SOLUTION_NAME)$suffix.zip"
+          $exportLog = Join-Path $artifactFolder "solution-export.log"
 
           $arguments = @(
             "solution", "export",
             "--environment", $env:SOURCE_ENVIRONMENT,
             "--name", $env:SOURCE_SOLUTION_NAME,
             "--path", $sourceZip,
-            "--overwrite",
-            "--max-async-wait-time", $env:MAX_WAIT
+            "--overwrite"
           )
 
-          if ($env:EXPORT_MANAGED -eq "true") {
-            $arguments += "--managed"
-          }
+          if ($env:EXPORT_MANAGED -eq "true") { $arguments += "--managed" }
           if ($env:EXPORT_ASYNC -eq "true") {
             $arguments += "--async"
+            $arguments += @("--max-async-wait-time", $env:MAX_WAIT)
           }
           if (-not [string]::IsNullOrWhiteSpace($env:EXPORT_INCLUDE)) {
             $arguments += @("--include", $env:EXPORT_INCLUDE)
           }
 
-          & pac @arguments
-          if ($LASTEXITCODE -ne 0) {
-            throw "The baseline solution export failed."
-          }
+          $output = & pac @arguments 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | Tee-Object -FilePath $exportLog | Write-Host
 
+          if ($exitCode -ne 0) { throw "The baseline solution export failed." }
           if (-not (Test-Path -LiteralPath $sourceZip -PathType Leaf)) {
             throw "The source solution ZIP was not created."
           }
 
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($sourceZip)
+          try {
+            $entries = @($archive.Entries.FullName)
+            if ($entries -notcontains "solution.xml" -or $entries -notcontains "customizations.xml") {
+              throw "The exported file is not a valid Power Platform solution ZIP."
+            }
+          }
+          finally { $archive.Dispose() }
+
+          $hash = (Get-FileHash -LiteralPath $sourceZip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $([System.IO.Path]::GetFileName($sourceZip))" |
+            Set-Content -LiteralPath (Join-Path $artifactFolder "source-package.sha256") -Encoding utf8
+
           "source_zip=$sourceZip" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "source_hash=$hash" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "artifact_folder=$artifactFolder" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Commit exact source ZIP immediately
+        id: commit_source_package
+        if: inputs.commit_baseline_to_branch
+        shell: pwsh
+        env:
+          BRANCH_REF: ${{ inputs.branch_ref }}
+          SOLUTION_NAME: ${{ inputs.solution_name }}
+          SOLUTION_PROJECT_FOLDER: ${{ inputs.solution_project_folder }}
+          SOURCE_ZIP: ${{ steps.export_baseline.outputs.source_zip }}
+          SOURCE_HASH: ${{ steps.export_baseline.outputs.source_hash }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $packageFolder = Join-Path $env:SOLUTION_PROJECT_FOLDER "package/source"
+          New-Item -ItemType Directory -Path $packageFolder -Force | Out-Null
+
+          $suffix = if ($env:SOURCE_ZIP -match '_managed\.zip$') { "_managed" } else { "_unmanaged" }
+          $repositoryZip = Join-Path $packageFolder "$($env:SOLUTION_NAME)$suffix.zip"
+          $hashFile = "$repositoryZip.sha256"
+
+          Copy-Item -LiteralPath $env:SOURCE_ZIP -Destination $repositoryZip -Force
+          "$($env:SOURCE_HASH)  $([System.IO.Path]::GetFileName($repositoryZip))" |
+            Set-Content -LiteralPath $hashFile -Encoding utf8
+
+          $relativeZip = [System.IO.Path]::GetRelativePath($env:GITHUB_WORKSPACE, $repositoryZip).Replace('\','/')
+          $relativeHash = [System.IO.Path]::GetRelativePath($env:GITHUB_WORKSPACE, $hashFile).Replace('\','/')
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f -- $relativeZip $relativeHash
+          git diff --cached --quiet
+
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "chore: store exact $($env:SOLUTION_NAME) source export [skip ci]"
+            if ($LASTEXITCODE -ne 0) { throw "The exact source-package commit failed." }
+            git push origin "HEAD:$env:BRANCH_REF"
+            if ($LASTEXITCODE -ne 0) { throw "The exact source package could not be pushed." }
+          }
+
+          "repository_zip=$relativeZip" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "repository_hash=$relativeHash" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Unpack baseline into the feature branch
         shell: pwsh
@@ -691,6 +766,7 @@ jobs:
           REQUESTED_NAME: ${{ inputs.workspace_environment }}
           REQUESTED_DOMAIN: ${{ inputs.workspace_environment_domain }}
           SUFFIX: ${{ inputs.workspace_environment_suffix }}
+          BRANCH_REF: ${{ inputs.branch_ref }}
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -707,9 +783,13 @@ jobs:
           }
 
           if ([string]::IsNullOrWhiteSpace($env:REQUESTED_NAME)) {
-            $environmentName = "{0}-{1}-{2}" -f `
+            $branchPart = Convert-ToSafeName (($env:BRANCH_REF -replace '^refs/heads/', '') -replace '^(feature|bugfix|hotfix)/', '')
+            if ([string]::IsNullOrWhiteSpace($branchPart)) { $branchPart = "WORK" }
+            if ($branchPart.Length -gt 24) { $branchPart = $branchPart.Substring(0, 24).Trim('-') }
+            $environmentName = "{0}-{1}-{2}-{3}" -f `
               (Convert-ToSafeName $env:PROJECT_KEY), `
               (Convert-ToSafeName $env:DEVELOPER_ALIAS), `
+              $branchPart, `
               (Convert-ToSafeName $env:SUFFIX)
           }
           else {
@@ -1008,34 +1088,25 @@ jobs:
             throw "The developer could not be assigned."
           }
 
-      - name: Pack solution from branch
+      - name: Prepare exact source package for import
         id: package
         shell: pwsh
         env:
           SOLUTION_NAME: ${{ inputs.solution_name }}
-          SOLUTION_SOURCE_FOLDER: ${{ inputs.solution_source_folder }}
-          PACKAGE_TYPE: ${{ inputs.solution_package_type }}
+          SOURCE_ZIP: ${{ steps.export_baseline.outputs.source_zip }}
+          SOURCE_HASH: ${{ steps.export_baseline.outputs.source_hash }}
           ARTIFACT_FOLDER: ${{ steps.export_baseline.outputs.artifact_folder }}
         run: |
           $ErrorActionPreference = "Stop"
-
-          $solutionZip = Join-Path $env:ARTIFACT_FOLDER "$($env:SOLUTION_NAME)-branch.zip"
-          $packLog = Join-Path $env:ARTIFACT_FOLDER "solution-pack.log"
-
-          & pac solution pack `
-            --zipfile "$solutionZip" `
-            --folder "$env:SOLUTION_SOURCE_FOLDER" `
-            --packagetype "$env:PACKAGE_TYPE" `
-            --errorlevel Verbose `
-            --log "$packLog"
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "The branch solution could not be packed."
+          if (-not (Test-Path -LiteralPath $env:SOURCE_ZIP -PathType Leaf)) {
+            throw "The exact source export is missing: $env:SOURCE_ZIP"
           }
-
+          $currentHash = (Get-FileHash -LiteralPath $env:SOURCE_ZIP -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($currentHash -ne $env:SOURCE_HASH) {
+            throw "The source solution ZIP changed after export. Expected $env:SOURCE_HASH but found $currentHash."
+          }
           $artifactName = "$($env:SOLUTION_NAME)-feature-start-${{ github.run_number }}"
-
-          "solution_zip=$solutionZip" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "solution_zip=$($env:SOURCE_ZIP)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "artifact_name=$artifactName" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Authenticate to developer environment
@@ -1059,12 +1130,237 @@ jobs:
             throw "Authentication to the developer environment failed."
           }
 
-      - name: Import solution into developer environment
+      - name: Provision and bind developer-environment connections
+        id: connection_settings
+        if: inputs.auto_bind_connection_references
         shell: pwsh
         env:
           SOLUTION_ZIP: ${{ steps.package.outputs.solution_zip }}
           ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
-          SETTINGS_FILE: ${{ inputs.deployment_settings_file }}
+          ENVIRONMENT_NAME: ${{ steps.names.outputs.environment_name }}
+          PROJECT_KEY: ${{ inputs.project_key }}
+          ARTIFACT_FOLDER: ${{ steps.export_baseline.outputs.artifact_folder }}
+          REQUIRE_BINDINGS: ${{ inputs.require_connection_bindings }}
+          PROVISION_DATAVERSE: ${{ inputs.provision_dataverse_connections }}
+          DATAVERSE_CONNECTION_NAME: ${{ inputs.dataverse_connection_name }}
+          PP_TENANT_ID: ${{ secrets.pp_tenant_id }}
+          PP_APP_ID: ${{ secrets.pp_app_id }}
+          PP_CLIENT_SECRET: ${{ secrets.pp_client_secret }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Normalize-ApiId([string]$Value) {
+            if ([string]::IsNullOrWhiteSpace($Value)) { return "" }
+            return $Value.Trim().TrimEnd('/').Split('/')[-1].ToLowerInvariant()
+          }
+
+          function Test-IsDataverseApi([string]$ApiId) {
+            return @('shared_commondataserviceforapps','shared_commondataservice') -contains (Normalize-ApiId $ApiId)
+          }
+
+          function Test-IsHealthy([string]$Status) {
+            if ([string]::IsNullOrWhiteSpace($Status)) { return $true }
+            return $Status -match '(?i)connected|ready|enabled'
+          }
+
+          function Get-Connections {
+            $raw = & pac connection list --environment "$env:ENVIRONMENT_URL" 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              $raw | Write-Host
+              throw "Unable to list connections in the developer environment."
+            }
+
+            $items = @()
+            foreach ($line in $raw) {
+              $text = [string]$line
+              $idMatch = [regex]::Match($text, '(?i)(?<id>[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})')
+              $apiMatch = [regex]::Match($text, '(?i)(?<api>shared_[a-z0-9_]+)')
+              if (-not $idMatch.Success -or -not $apiMatch.Success) { continue }
+
+              $nameStart = $idMatch.Index + $idMatch.Length
+              $nameLength = [Math]::Max(0, $apiMatch.Index - $nameStart)
+              $name = if ($nameLength -gt 0) { $text.Substring($nameStart, $nameLength).Trim(' ', '|', "`t") } else { "" }
+              $statusStart = $apiMatch.Index + $apiMatch.Length
+              $status = if ($statusStart -lt $text.Length) { $text.Substring($statusStart).Trim(' ', '|', "`t") } else { "" }
+
+              $items += [pscustomobject]@{
+                Id = $idMatch.Groups['id'].Value
+                Name = $name
+                ApiId = Normalize-ApiId $apiMatch.Groups['api'].Value
+                Status = $status
+              }
+            }
+            return @($items)
+          }
+
+          function Find-Connection($Connections, [string]$ApiId, [string]$PreferredName) {
+            $normalApi = Normalize-ApiId $ApiId
+            $aliases = if (Test-IsDataverseApi $normalApi) {
+              @('shared_commondataserviceforapps','shared_commondataservice')
+            }
+            else { @($normalApi) }
+
+            $matches = @($Connections | Where-Object {
+              $aliases -contains $_.ApiId -and (Test-IsHealthy $_.Status)
+            })
+
+            if (-not [string]::IsNullOrWhiteSpace($PreferredName)) {
+              $preferred = @($matches | Where-Object { $_.Name -ieq $PreferredName })
+              if ($preferred.Count -gt 0) { return $preferred[0] }
+            }
+            if ($matches.Count -eq 1) { return $matches[0] }
+            return $null
+          }
+
+          $generated = Join-Path $env:ARTIFACT_FOLDER "generated-deployment-settings.json"
+          & pac solution create-settings --solution-zip "$env:SOLUTION_ZIP" --settings-file "$generated"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $generated)) {
+            throw "PAC could not inspect the solution connection references."
+          }
+
+          $settings = Get-Content -LiteralPath $generated -Raw | ConvertFrom-Json
+          $references = @($settings.ConnectionReferences)
+          if ($references.Count -eq 0) {
+            "settings_file=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "mapping_status=NotRequired" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+
+          $desiredName = $env:DATAVERSE_CONNECTION_NAME
+          if ([string]::IsNullOrWhiteSpace($desiredName)) {
+            $safeProject = ($env:PROJECT_KEY -replace '[^A-Za-z0-9_-]', '-').Trim('-')
+            $safeEnvironment = ($env:ENVIRONMENT_NAME -replace '[^A-Za-z0-9 _-]', '-').Trim('-')
+            $desiredName = "ALM Dataverse - $safeProject - $safeEnvironment"
+            if ($desiredName.Length -gt 90) { $desiredName = $desiredName.Substring(0, 90).Trim() }
+          }
+
+          $connections = Get-Connections
+          $createdCount = 0
+          $unresolved = @()
+
+          foreach ($reference in $references) {
+            $apiId = Normalize-ApiId ([string]$reference.ConnectorId)
+            $preferredName = if (Test-IsDataverseApi $apiId) { $desiredName } else { "" }
+            $connection = Find-Connection $connections $apiId $preferredName
+
+            if ($null -eq $connection -and (Test-IsDataverseApi $apiId) -and $env:PROVISION_DATAVERSE -eq 'true') {
+              Write-Host "No reusable Dataverse connection was found. Creating '$desiredName' with the automation service principal."
+              $createOutput = & pac connection create `
+                --environment "$env:ENVIRONMENT_URL" `
+                --name "$desiredName" `
+                --application-id "$env:PP_APP_ID" `
+                --client-secret "$env:PP_CLIENT_SECRET" `
+                --tenant-id "$env:PP_TENANT_ID" 2>&1
+              $createExit = $LASTEXITCODE
+              $createOutput | Write-Host
+              if ($createExit -ne 0 -and (($createOutput -join "`n") -notmatch '(?i)already|exists')) {
+                throw "The workflow could not create the Dataverse service-principal connection."
+              }
+
+              for ($attempt = 1; $attempt -le 12; $attempt++) {
+                Start-Sleep -Seconds 5
+                $connections = Get-Connections
+                $connection = Find-Connection $connections $apiId $desiredName
+                if ($null -ne $connection) { break }
+              }
+              if ($null -ne $connection) { $createdCount++ }
+            }
+
+            if ($null -ne $connection) {
+              $reference.ConnectionId = $connection.Id
+              Write-Host "Bound $($reference.LogicalName) [$apiId] to $($connection.Name) [$($connection.Id)]."
+            }
+            else {
+              $reason = if (Test-IsDataverseApi $apiId) {
+                "Dataverse service-principal connection could not be created or resolved"
+              }
+              else {
+                "No existing connection was found. This connector requires its own authentication and cannot be created from the Dataverse service-principal credentials"
+              }
+              $unresolved += "$($reference.LogicalName) [$apiId]: $reason"
+            }
+          }
+
+          $resolved = [ordered]@{
+            EnvironmentVariables = @()
+            ConnectionReferences = $references
+          }
+          $resolvedFile = Join-Path $env:ARTIFACT_FOLDER "connection-settings.auto.json"
+          $resolved | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $resolvedFile -Encoding utf8
+          $unresolved | Set-Content -LiteralPath (Join-Path $env:ARTIFACT_FOLDER "unresolved-connections.txt") -Encoding utf8
+
+          if ($unresolved.Count -gt 0) {
+            $message = "Connection references could not be prepared: " + ($unresolved -join '; ')
+            if ($env:REQUIRE_BINDINGS -eq 'true') { throw $message }
+            Write-Warning $message
+            "settings_file=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "mapping_status=Incomplete" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
+          else {
+            "settings_file=$resolvedFile" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "mapping_status=Complete" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            "connections_created=$createdCount" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
+
+      - name: Record connection mapping when disabled
+        id: no_connection_settings
+        if: ${{ !inputs.auto_bind_connection_references }}
+        shell: pwsh
+        run: |
+          "settings_file=" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "mapping_status=ManualAfterImport" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Record connection references for manual setup
+        if: ${{ !inputs.auto_bind_connection_references }}
+        shell: pwsh
+        env:
+          SOLUTION_ZIP: ${{ steps.package.outputs.solution_zip }}
+          ARTIFACT_FOLDER: ${{ steps.export_baseline.outputs.artifact_folder }}
+        run: |
+          $ErrorActionPreference = "Continue"
+          $settingsFile = Join-Path $env:ARTIFACT_FOLDER "connection-references.manual.json"
+          $summaryFile = Join-Path $env:ARTIFACT_FOLDER "connection-references.manual.txt"
+
+          $output = & pac solution create-settings --solution-zip "$env:SOLUTION_ZIP" --settings-file "$settingsFile" 2>&1
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $settingsFile)) {
+            $output | Write-Warning
+            "The solution was imported without automatic connection mapping. Open the solution in the target environment and update its connection references manually." |
+              Set-Content -LiteralPath $summaryFile -Encoding utf8
+            exit 0
+          }
+
+          try {
+            $settings = Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json
+            $references = @($settings.ConnectionReferences)
+            if ($references.Count -eq 0) {
+              "No connection references were found in the solution package." |
+                Set-Content -LiteralPath $summaryFile -Encoding utf8
+            }
+            else {
+              $lines = @(
+                "The solution was imported without automatic connection mapping.",
+                "Update these connection references in the environment, then turn on the affected flows:"
+              )
+              foreach ($reference in $references) {
+                $lines += "- $($reference.LogicalName) | $($reference.ConnectorId)"
+              }
+              $lines | Set-Content -LiteralPath $summaryFile -Encoding utf8
+              Write-Warning "Connection references were left for manual configuration. The import will continue and affected flows may remain off."
+            }
+          }
+          catch {
+            "The solution was imported without automatic connection mapping. Open the solution in the target environment and update its connection references manually." |
+              Set-Content -LiteralPath $summaryFile -Encoding utf8
+          }
+
+      - name: Import exact source ZIP into developer environment
+        id: import_solution
+        shell: pwsh
+        env:
+          SOLUTION_ZIP: ${{ steps.package.outputs.solution_zip }}
+          EXPECTED_HASH: ${{ steps.export_baseline.outputs.source_hash }}
+          ENVIRONMENT_URL: ${{ steps.environment_details.outputs.environment_url }}
+          SETTINGS_FILE: ${{ steps.connection_settings.outputs.settings_file || steps.no_connection_settings.outputs.settings_file }}
           FORCE_OVERWRITE: ${{ inputs.force_overwrite }}
           PUBLISH_CHANGES: ${{ inputs.publish_changes }}
           ASYNC_IMPORT: ${{ inputs.asynchronous_import }}
@@ -1072,33 +1368,39 @@ jobs:
           SKIP_DEPENDENCY_CHECK: ${{ inputs.skip_dependency_check }}
           SKIP_LOWER_VERSION: ${{ inputs.skip_lower_version }}
           MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+          ARTIFACT_FOLDER: ${{ steps.export_baseline.outputs.artifact_folder }}
         run: |
           $ErrorActionPreference = "Stop"
+
+          $actualHash = (Get-FileHash -LiteralPath $env:SOLUTION_ZIP -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $env:EXPECTED_HASH) {
+            throw "The package hash changed before import. Expected $env:EXPECTED_HASH but found $actualHash."
+          }
 
           $arguments = @(
             "solution", "import",
             "--path", $env:SOLUTION_ZIP,
-            "--environment", $env:ENVIRONMENT_URL,
-            "--max-async-wait-time", $env:MAX_WAIT
+            "--environment", $env:ENVIRONMENT_URL
           )
-
           if ($env:FORCE_OVERWRITE -eq "true") { $arguments += "--force-overwrite" }
           if ($env:PUBLISH_CHANGES -eq "true") { $arguments += "--publish-changes" }
-          if ($env:ASYNC_IMPORT -eq "true") { $arguments += "--async" }
+          if ($env:ASYNC_IMPORT -eq "true") {
+            $arguments += "--async"
+            $arguments += @("--max-async-wait-time", $env:MAX_WAIT)
+          }
           if ($env:ACTIVATE_PLUGINS -eq "true") { $arguments += "--activate-plugins" }
           if ($env:SKIP_DEPENDENCY_CHECK -eq "true") { $arguments += "--skip-dependency-check" }
           if ($env:SKIP_LOWER_VERSION -eq "true") { $arguments += "--skip-lower-version" }
-
           if (-not [string]::IsNullOrWhiteSpace($env:SETTINGS_FILE)) {
-            if (-not (Test-Path -LiteralPath $env:SETTINGS_FILE -PathType Leaf)) {
-              throw "deployment_settings_file was not found: $env:SETTINGS_FILE"
-            }
             $arguments += @("--settings-file", $env:SETTINGS_FILE)
           }
 
-          & pac @arguments
-          if ($LASTEXITCODE -ne 0) {
-            throw "The solution import into the developer environment failed."
+          $importLog = Join-Path $env:ARTIFACT_FOLDER "solution-import.log"
+          $output = & pac @arguments 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | Tee-Object -FilePath $importLog | Write-Host
+          if ($exitCode -ne 0) {
+            throw "The exact exported solution ZIP failed to import. Review solution-import.log in the workflow artifact."
           }
 
       - name: Retrieve imported solution details
@@ -1223,6 +1525,9 @@ jobs:
           SOLUTION_URL: ${{ steps.links.outputs.solution_url }}
           SOLUTION_VERSION: ${{ steps.solution_details.outputs.solution_version }}
           BASELINE_SHA: ${{ steps.commit_baseline.outputs.commit_sha || steps.no_commit_baseline.outputs.commit_sha }}
+          SOURCE_PACKAGE: ${{ steps.commit_source_package.outputs.repository_zip }}
+          SOURCE_HASH: ${{ steps.export_baseline.outputs.source_hash }}
+          CONNECTION_MAPPING: ${{ steps.connection_settings.outputs.mapping_status || steps.no_connection_settings.outputs.mapping_status }}
           NEXT_STEP: ${{ inputs.next_step_message }}
         run: |
           @"
@@ -1233,6 +1538,12 @@ jobs:
           **Baseline source:** [$env:SOURCE_SOLUTION]($env:SOURCE_ENVIRONMENT)
 
           **Baseline commit:** ``$env:BASELINE_SHA``
+
+          **Exact source ZIP:** ``$env:SOURCE_PACKAGE``
+
+          **Source ZIP SHA256:** ``$env:SOURCE_HASH``
+
+          **Connection-reference mapping:** ``$env:CONNECTION_MAPPING``
 
           **Environment handling:** $env:ENVIRONMENT_ACTION
 

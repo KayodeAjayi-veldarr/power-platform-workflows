@@ -13,7 +13,7 @@ Solution Checker geography: UnitedKingdom
 Developer environment suffix: DEV
 Solution Checker rule set: Solution Checker
 
-Deployment settings file:
+Default build environment:
 Target environment templates:
 Target security group ID:
 Validation environment templates:

@@ -119,7 +119,7 @@ $targetLanguage = Get-OptionalSetting $settings 'Target language' 'English'
 $checkerGeo = Get-OptionalSetting $settings 'Solution Checker geography' 'UnitedKingdom'
 $developerEnvironmentSuffix = Get-OptionalSetting $settings 'Developer environment suffix' 'DEV'
 $checkerRuleSet = Get-OptionalSetting $settings 'Solution Checker rule set' 'Solution Checker'
-$deploymentSettingsFile = Get-OptionalSetting $settings 'Deployment settings file'
+$defaultBuildEnvironment = Get-OptionalSetting $settings 'Default build environment'
 $targetTemplates = Get-OptionalSetting $settings 'Target environment templates'
 $targetSecurityGroupId = Get-OptionalSetting $settings 'Target security group ID'
 $validationTemplates = Get-OptionalSetting $settings 'Validation environment templates'
@@ -182,7 +182,7 @@ $quotedValues = @(
     $checkerGeo,
     $developerEnvironmentSuffix,
     $checkerRuleSet,
-    $deploymentSettingsFile,
+    $defaultBuildEnvironment,
     $targetTemplates,
     $targetSecurityGroupId,
     $validationTemplates,
@@ -210,7 +210,7 @@ $replacements = [ordered]@{
     "__CHECKER_GEO__" = Escape-YamlDoubleQuotedValue $checkerGeo
     "__DEVELOPER_ENVIRONMENT_SUFFIX__" = Escape-YamlDoubleQuotedValue $developerEnvironmentSuffix
     "__CHECKER_RULE_SET__" = Escape-YamlDoubleQuotedValue $checkerRuleSet
-    "__DEPLOYMENT_SETTINGS_FILE__" = Escape-YamlDoubleQuotedValue $deploymentSettingsFile
+    "__DEFAULT_BUILD_ENVIRONMENT__" = Escape-YamlDoubleQuotedValue $defaultBuildEnvironment
     "__TARGET_TEMPLATES__" = Escape-YamlDoubleQuotedValue $targetTemplates
     "__TARGET_SECURITY_GROUP_ID__" = Escape-YamlDoubleQuotedValue $targetSecurityGroupId
     "__VALIDATION_TEMPLATES__" = Escape-YamlDoubleQuotedValue $validationTemplates
@@ -260,11 +260,13 @@ Write-Host "Project: $projectKey"
 Write-Host "Solution: $solutionName"
 Write-Host "Default solution folder: $defaultSolutionFolder"
 Write-Host "Each manual workflow run can use a different solution folder."
+Write-Host "Default build environment: $defaultBuildEnvironment"
 Write-Host ""
 Write-Host "No project-level GitHub Actions variables are required."
 Write-Host ""
 Write-Host "Next:"
-Write-Host "1. Confirm PP_TENANT_ID, PP_APP_ID and PP_CLIENT_SECRET are available to the project repository."
+Write-Host "1. Confirm the project repository can access the organisation secrets PP_TENANT_ID, PP_APP_ID and PP_CLIENT_SECRET."
 Write-Host "2. Apply the central repository settings checklist from the power-platform-workflows repository."
-Write-Host "3. Review the generated workflow defaults."
-Write-Host "4. Commit .github/workflows to $baseBranch."
+Write-Host "3. Confirm a clean build environment is available for managed deployments."
+Write-Host "4. Review the generated workflow defaults."
+Write-Host "5. Commit .github/workflows to $baseBranch."
