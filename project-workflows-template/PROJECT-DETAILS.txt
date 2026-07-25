@@ -1,0 +1,65 @@
+POWER PLATFORM PROJECT DETAILS
+==============================
+
+Edit the values after each colon, then run Install-ProjectWorkflows.ps1.
+The text inside angle brackets explains what to enter and must be replaced.
+
+REQUIRED PROJECT DETAILS
+------------------------
+
+Destination repository: <full local path to the project repository, for example C:\Repos\inventory-app>
+Project key: <short project identifier used in environment names, for example INVENTORY>
+Solution: <logical name of the solution, for example InventoryManagement>
+Default developer alias: <short developer identifier shown in workflow forms, for example KAYODE>
+Default developer UPN: <developer Microsoft 365 email address, for example developer@company.com>
+
+PROJECT FOLDERS
+---------------
+
+Solution project folder: <folder that contains the solution project, for example power-platform/InventoryManagement>
+Solution source folder: <folder that contains the unpacked solution files, for example power-platform/InventoryManagement/src>
+
+Use forward slashes in repository folder paths. Leave both folder values blank to use:
+
+power-platform/<Solution>
+power-platform/<Solution>/src
+
+WORKFLOW DEFAULTS
+-----------------
+
+Base branch: main
+Target region: europe
+Target currency: GBP
+Target language: English
+Solution Checker geography: UnitedKingdom
+Developer environment suffix: DEV
+Solution Checker rule set: Solution Checker
+
+OPTIONAL POWER PLATFORM SETTINGS
+--------------------------------
+
+Deployment settings file:
+Target environment templates:
+Target security group ID:
+Validation environment templates:
+Validation security group ID:
+Automation role: System Administrator
+Developer role: System Administrator
+
+REUSABLE WORKFLOW LOCATION
+--------------------------
+
+Reusable workflow repository: KayodeAjayi-Veldarr/power-platform-workflows
+Reusable workflow ref: main
+
+REQUIRED GITHUB SECRETS
+-----------------------
+
+The generated workflows expect these secret names:
+
+PP_TENANT_ID
+PP_APP_ID
+PP_CLIENT_SECRET
+
+They can be organisation secrets, provided the project repository has access to them.
+No project-level GitHub Actions variables are required.
