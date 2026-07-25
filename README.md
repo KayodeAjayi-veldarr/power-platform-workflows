@@ -1,4 +1,4 @@
-# Power Platform GitHub Workflows v15
+# Power Platform GitHub Workflows v17
 
 This repository contains four reusable GitHub Actions workflows:
 
@@ -11,8 +11,7 @@ This repository contains four reusable GitHub Actions workflows:
 ```
 
 Each Power Platform project has four small caller workflows with the same names.
-The callers contain the project-specific settings and invoke the shared reusable
-workflows in this repository.
+The callers contain the project settings and invoke the shared reusable workflows.
 
 ## Project workflow setup
 
@@ -22,18 +21,25 @@ Use the files in:
 project-workflows-template/
 ```
 
-Open `PROJECT-DETAILS.txt` and complete the required values. The two solution
-folder fields may remain blank.
-
-Then run:
+Open `PROJECT-DETAILS.txt`, complete the required values, and run:
 
 ```powershell
 .\project-workflows-template\Install-ProjectWorkflows.ps1
 ```
 
-The installer writes only the finished caller workflows into the selected
-project repository's `.github/workflows` folder. It does not copy the template
-support files into the project repository.
+The installer writes only the completed caller workflows into the selected
+project repository's `.github/workflows` folder.
+
+## Selecting a solution folder
+
+The solution logical name remains a project setting, but the repository folder is
+now a workflow input. This allows the same solution to be exported, committed,
+validated, or deployed from different repository folders.
+
+The default folder comes from `PROJECT-DETAILS.txt`. Each manual workflow run can
+override it. The source folder is always derived as `<solution_folder>/src`.
+Automatic pull request validation detects the changed solution folder when one
+folder is changed.
 
 ## Repository setup
 
@@ -43,17 +49,8 @@ Follow the central checklist at:
 REPOSITORY-SETTINGS.txt
 ```
 
-It is stored at the root of this shared workflow repository because it is a
-central setup guide. It should not be copied into every project repository.
-
-The checklist covers the settings that must be applied to the shared repository,
-the GitHub organisation, and each project repository.
-
-## GitHub configuration
-
-No project-level GitHub Actions variables are required.
-
-Each project repository must have access to these secret names:
+No project-level GitHub Actions variables are required. Each project repository
+must have access to these secret names:
 
 ```text
 PP_TENANT_ID
@@ -87,3 +84,24 @@ Deploy Solution from Git
 
 `Manage Feature Workspace` also supports deleting an old developer environment
 using the exact confirmation value requested by the workflow.
+
+
+## Azure Boards work item linking
+
+Connect each GitHub project repository to the correct Azure Boards project using the Azure Boards GitHub app. After the connection is active, enter one or more work item IDs in the **Commit Feature Changes** workflow. The workflow adds the required `AB#<id>` references to the Git commit message and pull request description.
+
+Examples:
+
+```text
+123
+123,456
+AB#123 AB#456
+```
+
+The resulting commit message will look like:
+
+```text
+Update chess move validation AB#123 AB#456
+```
+
+The workflow only creates links. It does not automatically change the state of a work item. To transition a work item, use Azure Boards supported wording such as `Fixed AB#123` deliberately.

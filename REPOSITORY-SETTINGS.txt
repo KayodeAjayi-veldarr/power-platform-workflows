@@ -143,3 +143,11 @@ and developer application-user role assignments.
     [ ] No project-level Actions variables have been created
     [ ] The default branch matches PROJECT-DETAILS.txt
     [ ] The Microsoft Entra application can access the required environments
+
+
+AZURE BOARDS
+
+For repositories that use Azure Boards work items:
+- Connect the project repository to the correct Azure Boards project using the Azure Boards GitHub app.
+- See AZURE-BOARDS-INTEGRATION.txt.
+- No Azure DevOps PAT or additional GitHub secret is required for AB# linking.

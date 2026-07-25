@@ -20,10 +20,22 @@ on:
         required: true
         type: string
 
+      solution_folder:
+        description: Repository folder to update with this solution export
+        required: true
+        default: "__DEFAULT_SOLUTION_FOLDER__"
+        type: string
+
       commit_message:
         description: Git commit message
         required: true
         default: "Sync __SOLUTION_NAME__ feature changes"
+        type: string
+
+      azure_work_item_ids:
+        description: Azure Boards work item IDs, for example 123 or 123,456
+        required: false
+        default: ""
         type: string
 
       create_pull_request:
@@ -61,14 +73,15 @@ jobs:
       developer_environment: ${{ inputs.developer_environment }}
 
       solution_name: "__SOLUTION_NAME__"
-      solution_project_folder: "__SOLUTION_PROJECT_FOLDER__"
-      solution_source_folder: "__SOLUTION_SOURCE_FOLDER__"
+      solution_project_folder: ${{ inputs.solution_folder }}
+      solution_source_folder: ${{ format('{0}/src', inputs.solution_folder) }}
       export_managed: false
       export_async: true
 
       commit_changes: true
       push_changes: true
       commit_message: ${{ inputs.commit_message }}
+      azure_work_item_ids: ${{ inputs.azure_work_item_ids }}
       create_pull_request: ${{ inputs.create_pull_request }}
       pull_request_title: ${{ inputs.pull_request_title }}
       pull_request_body: >-

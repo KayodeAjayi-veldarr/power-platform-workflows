@@ -468,14 +468,18 @@ jobs:
             throw "source_solution_name is required."
           }
 
-          if (-not (Test-Path -LiteralPath $env:SOLUTION_PROJECT_FOLDER -PathType Container)) {
-            throw "solution_project_folder was not found: $env:SOLUTION_PROJECT_FOLDER"
+          if ([string]::IsNullOrWhiteSpace($env:SOLUTION_PROJECT_FOLDER)) {
+            throw "solution_project_folder is required."
           }
 
-          $sourceParent = Split-Path -Parent $env:SOLUTION_SOURCE_FOLDER
-          if (-not [string]::IsNullOrWhiteSpace($sourceParent)) {
-            New-Item -ItemType Directory -Path $sourceParent -Force | Out-Null
+          if ([string]::IsNullOrWhiteSpace($env:SOLUTION_SOURCE_FOLDER)) {
+            throw "solution_source_folder is required."
           }
+
+          # These folders may not exist on the first run. Create them inside the
+          # checked-out project repository before exporting and unpacking the baseline.
+          New-Item -ItemType Directory -Path $env:SOLUTION_PROJECT_FOLDER -Force | Out-Null
+          New-Item -ItemType Directory -Path $env:SOLUTION_SOURCE_FOLDER -Force | Out-Null
 
           if (@("Unmanaged", "Managed") -notcontains $env:SOLUTION_PACKAGE_TYPE) {
             throw "solution_package_type must be Unmanaged or Managed."

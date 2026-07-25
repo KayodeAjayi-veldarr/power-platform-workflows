@@ -20,6 +20,12 @@ on:
         default: ""
         type: string
 
+      solution_folder:
+        description: Repository folder containing the solution to validate
+        required: false
+        default: "__DEFAULT_SOLUTION_FOLDER__"
+        type: string
+
       validation_environment_type:
         description: Temporary environment type
         required: true
@@ -69,7 +75,114 @@ permissions:
   contents: read
 
 jobs:
+  resolve_solution_folder:
+    name: Resolve solution folder
+    runs-on: ubuntu-latest
+    outputs:
+      solution_folder: ${{ steps.resolve.outputs.solution_folder }}
+
+    steps:
+      - name: Check out validation source
+        uses: actions/checkout@v4
+        with:
+          ref: >-
+            ${{ github.event.pull_request.head.sha ||
+            inputs.source_ref ||
+            github.ref_name }}
+          fetch-depth: 0
+
+      - name: Resolve solution folder
+        id: resolve
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_FOLDER: ${{ inputs.solution_folder }}
+          DEFAULT_FOLDER: "__DEFAULT_SOLUTION_FOLDER__"
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $selectedFolder = ""
+
+          if ($env:EVENT_NAME -eq "workflow_dispatch") {
+            $selectedFolder = $env:REQUESTED_FOLDER
+
+            if ([string]::IsNullOrWhiteSpace($selectedFolder)) {
+              $selectedFolder = $env:DEFAULT_FOLDER
+            }
+          }
+          else {
+            $changedFiles = @()
+
+            if (
+              -not [string]::IsNullOrWhiteSpace($env:BASE_SHA) -and
+              -not [string]::IsNullOrWhiteSpace($env:HEAD_SHA)
+            ) {
+              $changedFiles = @(
+                git diff --name-only "$($env:BASE_SHA)" "$($env:HEAD_SHA)"
+              )
+
+              if ($LASTEXITCODE -ne 0) {
+                throw "Could not inspect the pull request changes."
+              }
+            }
+
+            $candidateFolders = @(
+              foreach ($changedFile in $changedFiles) {
+                $normalisedPath = ([string]$changedFile).Replace('\', '/')
+
+                if ($normalisedPath -match '^(?<folder>.+?)/src(?:/|$)') {
+                  $Matches.folder
+                }
+              }
+            ) | Sort-Object -Unique
+
+            if ($candidateFolders.Count -eq 1) {
+              $selectedFolder = $candidateFolders[0]
+            }
+            elseif ($candidateFolders.Count -gt 1) {
+              throw (
+                "More than one solution folder changed in this pull request: " +
+                ($candidateFolders -join ', ') +
+                ". Run the workflow manually and select one folder, or split the changes into separate pull requests."
+              )
+            }
+            else {
+              $selectedFolder = $env:DEFAULT_FOLDER
+            }
+          }
+
+          $selectedFolder = ([string]$selectedFolder).Replace('\', '/')
+
+          if (
+            $selectedFolder.StartsWith('/') -or
+            $selectedFolder -match '^[A-Za-z]:'
+          ) {
+            throw "solution_folder must be relative to the repository root."
+          }
+
+          $selectedFolder = $selectedFolder.Trim('/')
+          $segments = @($selectedFolder.Split('/') | Where-Object { $_ -ne '' })
+
+          if (
+            [string]::IsNullOrWhiteSpace($selectedFolder) -or
+            $segments -contains '..'
+          ) {
+            throw "solution_folder is empty or contains an unsafe path segment."
+          }
+
+          $solutionSourceFolder = "$selectedFolder/src"
+
+          if (-not (Test-Path -LiteralPath $solutionSourceFolder -PathType Container)) {
+            throw "The selected solution source folder was not found: $solutionSourceFolder"
+          }
+
+          "solution_folder=$selectedFolder" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
   validate:
+    needs: resolve_solution_folder
     uses: __REUSABLE_WORKFLOW_REPOSITORY__/.github/workflows/validate-pull-request.yml@__REUSABLE_WORKFLOW_REF__
 
     with:
@@ -84,7 +197,7 @@ jobs:
         ${{ github.event.pull_request.number || 0 }}
 
       solution_name: "__SOLUTION_NAME__"
-      solution_source_folder: "__SOLUTION_SOURCE_FOLDER__"
+      solution_source_folder: ${{ format('{0}/src', needs.resolve_solution_folder.outputs.solution_folder) }}
       solution_package_type: Unmanaged
       deployment_settings_file: "__DEPLOYMENT_SETTINGS_FILE__"
 

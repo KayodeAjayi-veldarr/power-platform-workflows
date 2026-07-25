@@ -111,8 +111,7 @@ $solutionName = Get-RequiredSetting $settings 'Solution'
 $defaultDeveloperAlias = Get-RequiredSetting $settings 'Default developer alias'
 $defaultDeveloperUpn = Get-RequiredSetting $settings 'Default developer UPN'
 
-$solutionProjectFolder = Get-OptionalSetting $settings 'Solution project folder'
-$solutionSourceFolder = Get-OptionalSetting $settings 'Solution source folder'
+$defaultSolutionFolder = Get-OptionalSetting $settings 'Default solution folder'
 $baseBranch = Get-OptionalSetting $settings 'Base branch' 'main'
 $targetRegion = Get-OptionalSetting $settings 'Target region' 'europe'
 $targetCurrency = Get-OptionalSetting $settings 'Target currency' 'GBP'
@@ -145,19 +144,36 @@ $destination = (Resolve-Path -LiteralPath $destinationRepositoryPath).Path
 $destinationWorkflows = Join-Path $destination ".github\workflows"
 New-Item -ItemType Directory -Path $destinationWorkflows -Force | Out-Null
 
-if ([string]::IsNullOrWhiteSpace($solutionProjectFolder)) {
-    $solutionProjectFolder = "power-platform/$solutionName"
+if ([string]::IsNullOrWhiteSpace($defaultSolutionFolder)) {
+    $defaultSolutionFolder = "power-platform/$solutionName"
 }
 
-if ([string]::IsNullOrWhiteSpace($solutionSourceFolder)) {
-    $solutionSourceFolder = "$solutionProjectFolder/src"
+$defaultSolutionFolder = $defaultSolutionFolder.Replace('\', '/')
+
+if (
+    $defaultSolutionFolder.StartsWith('/') -or
+    $defaultSolutionFolder -match '^[A-Za-z]:'
+) {
+    throw "Default solution folder must be relative to the repository root."
+}
+
+$defaultSolutionFolder = $defaultSolutionFolder.Trim('/')
+$solutionFolderSegments = @(
+    $defaultSolutionFolder.Split('/') |
+        Where-Object { $_ -ne '' }
+)
+
+if (
+    [string]::IsNullOrWhiteSpace($defaultSolutionFolder) -or
+    $solutionFolderSegments -contains '..'
+) {
+    throw "Default solution folder is empty or contains an unsafe path segment."
 }
 
 $quotedValues = @(
     $projectKey,
     $solutionName,
-    $solutionProjectFolder,
-    $solutionSourceFolder,
+    $defaultSolutionFolder,
     $defaultDeveloperAlias,
     $defaultDeveloperUpn,
     $targetRegion,
@@ -184,8 +200,7 @@ foreach ($value in $quotedValues) {
 $replacements = [ordered]@{
     "__PROJECT_KEY__" = Escape-YamlDoubleQuotedValue $projectKey
     "__SOLUTION_NAME__" = Escape-YamlDoubleQuotedValue $solutionName
-    "__SOLUTION_PROJECT_FOLDER__" = Escape-YamlDoubleQuotedValue $solutionProjectFolder
-    "__SOLUTION_SOURCE_FOLDER__" = Escape-YamlDoubleQuotedValue $solutionSourceFolder
+    "__DEFAULT_SOLUTION_FOLDER__" = Escape-YamlDoubleQuotedValue $defaultSolutionFolder
     "__DEFAULT_DEVELOPER_ALIAS__" = Escape-YamlDoubleQuotedValue $defaultDeveloperAlias
     "__DEFAULT_DEVELOPER_UPN__" = Escape-YamlDoubleQuotedValue $defaultDeveloperUpn
     "__BASE_BRANCH__" = $baseBranch
@@ -243,8 +258,8 @@ Write-Host $destinationWorkflows
 Write-Host ""
 Write-Host "Project: $projectKey"
 Write-Host "Solution: $solutionName"
-Write-Host "Solution project folder: $solutionProjectFolder"
-Write-Host "Solution source folder: $solutionSourceFolder"
+Write-Host "Default solution folder: $defaultSolutionFolder"
+Write-Host "Each manual workflow run can use a different solution folder."
 Write-Host ""
 Write-Host "No project-level GitHub Actions variables are required."
 Write-Host ""

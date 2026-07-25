@@ -55,6 +55,11 @@ on:
         required: false
         default: Sync Power Platform feature changes
         type: string
+      azure_work_item_ids:
+        description: Azure Boards work item IDs separated by commas or spaces
+        required: false
+        default: ""
+        type: string
       create_pull_request:
         required: false
         default: false
@@ -376,6 +381,7 @@ jobs:
           BRANCH_REF: ${{ inputs.branch_ref }}
           SOLUTION_PROJECT_FOLDER: ${{ inputs.solution_project_folder }}
           COMMIT_MESSAGE: ${{ inputs.commit_message }}
+          AZURE_WORK_ITEM_IDS: ${{ inputs.azure_work_item_ids }}
           COMMIT_CHANGES: ${{ inputs.commit_changes }}
           PUSH_CHANGES: ${{ inputs.push_changes }}
         run: |
@@ -405,7 +411,35 @@ jobs:
             exit 0
           }
 
-          git commit -m "$env:COMMIT_MESSAGE"
+          $commitMessage = $env:COMMIT_MESSAGE.Trim()
+          $workItemReferences = @()
+
+          if (-not [string]::IsNullOrWhiteSpace($env:AZURE_WORK_ITEM_IDS)) {
+            $tokens = $env:AZURE_WORK_ITEM_IDS -split '[,;\s]+' | Where-Object {
+              -not [string]::IsNullOrWhiteSpace($_)
+            }
+
+            foreach ($token in $tokens) {
+              $candidate = $token.Trim()
+              if ($candidate -match '^(?i:AB#)?(?<id>\d+)$') {
+                $reference = "AB#$($Matches.id)"
+                if ($workItemReferences -notcontains $reference) {
+                  $workItemReferences += $reference
+                }
+              }
+              else {
+                throw "Invalid Azure Boards work item ID: $candidate. Use numeric IDs such as 123 or AB#123."
+              }
+            }
+          }
+
+          foreach ($reference in $workItemReferences) {
+            if ($commitMessage -notmatch "(?i)(^|\s)$([regex]::Escape($reference))(?=\s|$|[.,;:])") {
+              $commitMessage = "$commitMessage $reference"
+            }
+          }
+
+          git commit -m "$commitMessage"
           if ($LASTEXITCODE -ne 0) {
             throw "The feature commit failed."
           }
@@ -496,6 +530,7 @@ jobs:
           BASE_BRANCH: ${{ inputs.base_branch }}
           PR_TITLE: ${{ inputs.pull_request_title }}
           PR_BODY: ${{ inputs.pull_request_body }}
+          AZURE_WORK_ITEM_IDS: ${{ inputs.azure_work_item_ids }}
           PR_DRAFT: ${{ inputs.pull_request_draft }}
           PROJECT_KEY: ${{ inputs.project_key }}
         run: |
@@ -531,6 +566,31 @@ jobs:
           }
           else {
             $env:PR_BODY
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:AZURE_WORK_ITEM_IDS)) {
+            $references = @()
+            $tokens = $env:AZURE_WORK_ITEM_IDS -split '[,;\s]+' | Where-Object {
+              -not [string]::IsNullOrWhiteSpace($_)
+            }
+
+            foreach ($token in $tokens) {
+              if ($token.Trim() -match '^(?i:AB#)?(?<id>\d+)$') {
+                $reference = "AB#$($Matches.id)"
+                if ($references -notcontains $reference) {
+                  $references += $reference
+                }
+              }
+            }
+
+            if ($references.Count -gt 0) {
+              $missingReferences = @($references | Where-Object {
+                $body -notmatch "(?i)(^|\s)$([regex]::Escape($_))(?=\s|$|[.,;:])"
+              })
+              if ($missingReferences.Count -gt 0) {
+                $body = "$body`n`nAzure Boards: $($missingReferences -join ', ')"
+              }
+            }
           }
 
           $arguments = @(

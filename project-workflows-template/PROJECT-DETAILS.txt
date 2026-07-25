@@ -1,11 +1,9 @@
 Destination repository: <full local path to the project repository>
 Project key: <short project identifier>
 Solution: <logical name of the solution>
+Default solution folder:
 Default developer alias: <short developer identifier>
 Default developer UPN: <developer Microsoft 365 email address>
-
-Solution project folder:
-Solution source folder:
 
 Base branch: main
 Target region: europe
