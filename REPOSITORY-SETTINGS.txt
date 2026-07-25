@@ -38,8 +38,9 @@ Enable:
 
     Allow GitHub Actions to create and approve pull requests
 
-This is required because Commit Feature Changes can create a pull request after
-committing the exported solution changes.
+This is required because Commit Feature Changes can create a pull request and
+Deploy Solution from Git can commit the exact generated solution ZIP back to
+the selected solution folder in the project repository.
 
 ----------------------------------------------------------------------
 2. SHARED WORKFLOW REPOSITORY: ACCESS

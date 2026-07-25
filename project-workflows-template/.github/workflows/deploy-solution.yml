@@ -42,8 +42,14 @@ on:
         default: true
         type: boolean
 
+      commit_solution_zip:
+        description: Commit the generated solution ZIP to this repository
+        required: true
+        default: true
+        type: boolean
+
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   deploy:
@@ -67,6 +73,9 @@ jobs:
 
       upload_solution_artifact: true
       artifact_retention_days: 14
+
+      commit_solution_zip: ${{ inputs.commit_solution_zip }}
+      solution_zip_repository_folder: ${{ format('{0}/package', inputs.solution_folder) }}
 
     secrets:
       pp_tenant_id: ${{ secrets.PP_TENANT_ID }}

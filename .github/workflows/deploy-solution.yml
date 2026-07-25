@@ -76,6 +76,18 @@ on:
         default: 14
         type: number
 
+      commit_solution_zip:
+        description: Commit the exact packed ZIP to the project repository
+        required: false
+        default: true
+        type: boolean
+
+      solution_zip_repository_folder:
+        description: Repository folder where the generated ZIP is stored
+        required: false
+        default: power-platform-packages
+        type: string
+
     secrets:
       pp_tenant_id:
         required: true
@@ -114,8 +126,11 @@ on:
       solution_artifact_name:
         value: ${{ jobs.deploy.outputs.solution_artifact_name }}
 
+      solution_repository_path:
+        value: ${{ jobs.deploy.outputs.solution_repository_path }}
+
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   deploy:
@@ -139,6 +154,7 @@ jobs:
       solution_url: ${{ steps.links.outputs.solution_url }}
       solution_version: ${{ steps.solution_details.outputs.solution_version }}
       solution_artifact_name: ${{ steps.package.outputs.artifact_name }}
+      solution_repository_path: ${{ steps.commit_package.outputs.repository_path }}
 
     steps:
       - name: Check out deployment source
@@ -147,6 +163,7 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ inputs.source_ref }}
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Install Power Platform tools
         uses: microsoft/powerplatform-actions/actions-install@v1
@@ -200,9 +217,22 @@ jobs:
             -Force |
             Out-Null
 
+          $packageFileName = if (
+            $env:PACKAGE_TYPE -eq "Managed"
+          ) {
+            "$($env:SOLUTION_NAME)_managed.zip"
+          }
+          else {
+            "$($env:SOLUTION_NAME).zip"
+          }
+
           $solutionZip = Join-Path `
             $artifactRoot `
-            "$($env:SOLUTION_NAME)-deployment.zip"
+            $packageFileName
+
+          if (Test-Path -LiteralPath $solutionZip) {
+            Remove-Item -LiteralPath $solutionZip -Force
+          }
 
           $packLog = Join-Path `
             $artifactRoot `
@@ -231,6 +261,90 @@ jobs:
             Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           "artifact_name=$artifactName" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          "package_file_name=$packageFileName" |
+            Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Commit exact packed solution ZIP
+        id: commit_package
+        if: inputs.commit_solution_zip
+        shell: pwsh
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+          SOLUTION_NAME: ${{ inputs.solution_name }}
+          PACKAGE_FILE_NAME: ${{ steps.package.outputs.package_file_name }}
+          ZIP_REPOSITORY_FOLDER: ${{ inputs.solution_zip_repository_folder }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $branchName = $env:SOURCE_REF
+
+          if ($branchName.StartsWith("refs/heads/")) {
+            $branchName = $branchName.Substring(
+              "refs/heads/".Length
+            )
+          }
+
+          if (
+            [string]::IsNullOrWhiteSpace($branchName) -or
+            $branchName -match '^[0-9a-f]{40}$' -or
+            $branchName.StartsWith("refs/tags/")
+          ) {
+            throw @"
+          source_ref must be a branch when commit_solution_zip is enabled.
+
+          Current value: $($env:SOURCE_REF)
+          "@
+          }
+
+          $repositoryFolder = Join-Path `
+            $env:GITHUB_WORKSPACE `
+            $env:ZIP_REPOSITORY_FOLDER
+
+          $solutionFolder = Join-Path `
+            $repositoryFolder `
+            $env:SOLUTION_NAME
+
+          New-Item `
+            -ItemType Directory `
+            -Path $solutionFolder `
+            -Force |
+            Out-Null
+
+          $repositoryZip = Join-Path `
+            $solutionFolder `
+            $env:PACKAGE_FILE_NAME
+
+          Copy-Item `
+            -LiteralPath "${{ steps.package.outputs.solution_zip }}" `
+            -Destination $repositoryZip `
+            -Force
+
+          $relativePath = [System.IO.Path]::GetRelativePath(
+            $env:GITHUB_WORKSPACE,
+            $repositoryZip
+          ).Replace('\', '/')
+
+          git config user.name "github-actions[bot]"
+          git config user.email `
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -- $relativePath
+          git diff --cached --quiet
+
+          if ($LASTEXITCODE -ne 0) {
+            git commit `
+              -m "chore: update packed $($env:SOLUTION_NAME) solution [skip ci]"
+
+            git pull --rebase origin $branchName
+            git push origin "HEAD:$branchName"
+          }
+          else {
+            Write-Host "The packed solution ZIP has not changed."
+          }
+
+          "repository_path=$relativePath" |
             Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Authenticate for target environment lookup
@@ -696,6 +810,7 @@ jobs:
           SOLUTION_URL: ${{ steps.links.outputs.solution_url }}
           SOLUTION_VERSION: ${{ steps.solution_details.outputs.solution_version }}
           ARTIFACT_NAME: ${{ steps.package.outputs.artifact_name }}
+          REPOSITORY_PATH: ${{ steps.commit_package.outputs.repository_path }}
         run: |
           @"
           # Power Platform deployment complete
@@ -715,6 +830,8 @@ jobs:
           **Solution version:** ``$env:SOLUTION_VERSION``
 
           **Exact deployed package and logs:** ``$env:ARTIFACT_NAME``
+
+          **Repository package:** ``$env:REPOSITORY_PATH``
           "@ |
             Out-File `
               -FilePath $env:GITHUB_STEP_SUMMARY `

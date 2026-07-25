@@ -1,4 +1,4 @@
-# Power Platform GitHub Workflows v17
+# Power Platform GitHub Workflows v19
 
 This repository contains four reusable GitHub Actions workflows:
 
@@ -40,6 +40,29 @@ The default folder comes from `PROJECT-DETAILS.txt`. Each manual workflow run ca
 override it. The source folder is always derived as `<solution_folder>/src`.
 Automatic pull request validation detects the changed solution folder when one
 folder is changed.
+
+## Generated deployment ZIP in the project repository
+
+`Deploy Solution from Git` now packs the solution automatically, uploads the
+exact ZIP as a GitHub Actions artifact, and commits the same ZIP into the project
+repository before import.
+
+The default project caller stores the package under the selected solution folder:
+
+```text
+<solution_folder>/package/<solution_name>.zip
+```
+
+Managed packages use:
+
+```text
+<solution_folder>/package/<solution_name>_managed.zip
+```
+
+The paths are generated from workflow inputs. No solution name or project folder
+is hardcoded in the shared workflow. Because the workflow pushes the ZIP back to
+the project repository, the deployment caller and reusable workflow require
+`contents: write`.
 
 ## Repository setup
 
