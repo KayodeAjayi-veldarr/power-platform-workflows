@@ -747,8 +747,6 @@ jobs:
             $env:ENVIRONMENT_NAME,
             "--domain",
             $env:ENVIRONMENT_DOMAIN,
-            "--purpose",
-            $env:ENVIRONMENT_PURPOSE,
             "--type",
             $env:ENVIRONMENT_TYPE,
             "--region",
