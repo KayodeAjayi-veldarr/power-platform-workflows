@@ -293,7 +293,7 @@ jobs:
       group: >-
         power-platform-validation-${{ github.repository }}-${{
         inputs.pull_request_number }}-${{ inputs.source_ref }}
-      cancel-in-progress: false
+      cancel-in-progress: true
 
     outputs:
       validation_passed: ${{ steps.final_result.outputs.validation_passed }}
