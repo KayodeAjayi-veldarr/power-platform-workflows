@@ -162,7 +162,8 @@ jobs:
       workspace_environment_templates: "__TARGET_TEMPLATES__"
       workspace_environment_security_group_id: "__TARGET_SECURITY_GROUP_ID__"
 
-      environment_create_async: true
+      environment_create_async: false
+      environment_stabilization_seconds: 180
 
       assign_automation_user: true
       automation_role: "__AUTOMATION_ROLE__"
