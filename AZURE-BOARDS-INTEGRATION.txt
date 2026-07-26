@@ -17,7 +17,7 @@ ONE-TIME CONNECTION
 
 WORKFLOW USE
 
-Run Commit Feature Changes and populate Azure work item IDs.
+Run Commit Solution Changes and populate Azure work item IDs.
 
 Accepted examples:
 123

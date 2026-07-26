@@ -58,7 +58,7 @@ on:
         type: boolean
       commit_message:
         required: false
-        default: Sync Power Platform feature changes
+        default: Sync Power Platform solution changes
         type: string
       azure_work_item_ids:
         description: Azure Boards work item IDs separated by commas or spaces
@@ -139,7 +139,7 @@ permissions:
 
 jobs:
   commit:
-    name: Commit feature changes
+    name: Commit solution changes
     runs-on: windows-latest
     timeout-minutes: 120
 
@@ -164,7 +164,7 @@ jobs:
       solution_artifact_name: ${{ steps.export.outputs.artifact_name }}
 
     steps:
-      - name: Check out feature branch
+      - name: Check out change branch
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
@@ -417,7 +417,7 @@ jobs:
             throw "The exported solution could not be unpacked."
           }
 
-      - name: Commit and push feature changes
+      - name: Commit and push solution changes
         id: git_changes
         shell: pwsh
         env:
@@ -605,7 +605,7 @@ jobs:
           }
 
           $body = if ([string]::IsNullOrWhiteSpace($env:PR_BODY)) {
-            "Power Platform feature changes exported from the developer environment."
+            "Power Platform solution changes exported from the developer environment."
           }
           else {
             $env:PR_BODY

@@ -3,10 +3,10 @@
 Reusable GitHub Actions workflows for moving Power Platform solutions through a simple ALM flow:
 
 ```text
-make a feature branch
+make a short-lived change branch from main
 manage a Power Platform development environment
 export and commit solution changes
-validate a pull request in a clean temporary environment
+validate a pull request in a clean test environment
 build a managed release
 import the managed release into the target environment
 ```
@@ -18,7 +18,7 @@ The workflows are designed for low-code teams who want GitHub version control wi
 This repo contains reusable workflows for:
 
 - `manage-power-platform-development-environment.yml` - **1. Manage Power Platform Development Environment**: create, reuse, or delete a development environment and sync a solution baseline.
-- `commit-feature-changes.yml` - **2. Commit Feature Changes**: export an unmanaged solution from a developer environment and commit the unpacked source.
+- `commit-feature-changes.yml` - **2. Commit Solution Changes**: export an unmanaged solution from a developer environment and commit the unpacked source from a short-lived change branch.
 - `validate-pull-request.yml` - **3. Validate Power Platform Pull Request**: pack the solution and validate it in a temporary Power Platform environment.
 - `deploy-solution.yml` - **4. Build and Deploy Solution**: build a managed release through a clean build environment and deploy it to a target environment.
 - `bootstrap-project-workflows.yml` - generate the small caller workflows that live in each project repository.
@@ -79,14 +79,16 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\project-workflows-template\Insta
 
 ## Normal Workflow
 
-1. Create a feature branch.
+1. Create a short-lived change branch from `main`, such as `change/<work-item>` or `hotfix/<issue>`.
 2. Run **1. Manage Power Platform Development Environment** to prepare or reuse a developer environment.
 3. Make changes in Power Platform.
-4. Run **2. Commit Feature Changes** to export and commit the solution source.
+4. Run **2. Commit Solution Changes** to export and commit the solution source.
 5. Open a pull request.
-6. Let **3. Validate Power Platform Pull Request** test the solution in a temporary environment.
+6. Let **3. Validate Power Platform Pull Request** test the solution in a clean test validation environment.
 7. Merge to `main`.
 8. Run **4. Build and Deploy Solution** to build and import the managed release.
+
+Hotfixes use the same flow: create a short-lived `hotfix/<issue>` branch from `main`, validate through a pull request, merge back to `main`, then deploy.
 
 ## Important Defaults
 

@@ -25,7 +25,7 @@ entered when running a managed deployment.
 <solution_folder>/package/source/
 ```
 
-contains the exact unmanaged ZIP exported from a source or feature developer
+contains the exact unmanaged ZIP exported from a source or developer
 environment.
 
 ```text

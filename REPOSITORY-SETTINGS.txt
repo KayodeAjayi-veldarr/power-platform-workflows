@@ -38,7 +38,7 @@ Enable:
 
     Allow GitHub Actions to create and approve pull requests
 
-This is required because Commit Feature Changes can create a pull request and
+This is required because Commit Solution Changes can create a pull request and
 Deploy Solution from Git can commit the exact generated solution ZIP back to
 the selected solution folder in the project repository.
 
@@ -172,4 +172,3 @@ not transported in solution ZIP files.
 Advanced automatic binding remains available in the reusable workflows but is
 disabled in the generated project workflows. Enable it only when the connection
 identity and mapping rules have been deliberately defined for that environment.
-

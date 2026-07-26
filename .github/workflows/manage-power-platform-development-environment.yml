@@ -458,7 +458,7 @@ jobs:
       solution_artifact_name: ${{ steps.package.outputs.artifact_name }}
 
     steps:
-      - name: Check out feature branch
+      - name: Check out change branch
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
@@ -684,7 +684,7 @@ jobs:
           "repository_zip=$relativeZip" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "repository_hash=$relativeHash" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      - name: Unpack baseline into the feature branch
+      - name: Unpack baseline into the change branch
         shell: pwsh
         env:
           SOURCE_ZIP: ${{ steps.export_baseline.outputs.source_zip }}
@@ -721,7 +721,7 @@ jobs:
             throw "The baseline solution could not be unpacked into the branch."
           }
 
-      - name: Commit baseline files to the feature branch
+      - name: Commit baseline files to the change branch
         id: commit_baseline
         if: inputs.commit_baseline_to_branch
         shell: pwsh
@@ -796,7 +796,7 @@ jobs:
           }
 
           if ([string]::IsNullOrWhiteSpace($env:REQUESTED_NAME)) {
-            $branchPart = Convert-ToSafeName (($env:BRANCH_REF -replace '^refs/heads/', '') -replace '^(feature|bugfix|hotfix)/', '')
+            $branchPart = Convert-ToSafeName (($env:BRANCH_REF -replace '^refs/heads/', '') -replace '^(change|feature|bugfix|hotfix)/', '')
             if ([string]::IsNullOrWhiteSpace($branchPart)) { $branchPart = "WORK" }
             if ($branchPart.Length -gt 24) { $branchPart = $branchPart.Substring(0, 24).Trim('-') }
             $environmentName = "{0}-{1}-{2}-{3}" -f `
@@ -1842,4 +1842,3 @@ jobs:
 
           **Deletion status:** ``$env:STATUS``
           "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
-
