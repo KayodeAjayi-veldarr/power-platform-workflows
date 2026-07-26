@@ -170,8 +170,14 @@ on:
       environment_create_async:
         description: Create the temporary environment asynchronously
         required: false
-        default: true
+        default: false
         type: boolean
+
+      environment_stabilization_seconds:
+        description: Seconds to wait after creating a new temporary environment before importing a solution
+        required: false
+        default: 180
+        type: number
 
       force_overwrite:
         description: Force overwrite unmanaged customisations during import
@@ -945,6 +951,28 @@ jobs:
 
           "environment_url=$environmentUrl" |
             Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Wait for temporary validation environment readiness
+        if: >-
+          ${{
+            inputs.create_temporary_validation_environment &&
+            steps.create_environment.outcome == 'success'
+          }}
+        shell: pwsh
+        env:
+          WAIT_SECONDS: ${{ inputs.environment_stabilization_seconds }}
+          ENVIRONMENT_NAME: ${{ steps.setup.outputs.environment_name }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $seconds = [int]$env:WAIT_SECONDS
+          if ($seconds -le 0) {
+            Write-Host "No stabilization wait configured for $env:ENVIRONMENT_NAME."
+            exit 0
+          }
+
+          Write-Host "Waiting $seconds seconds for Dataverse provisioning to settle in $env:ENVIRONMENT_NAME."
+          Start-Sleep -Seconds $seconds
 
       - name: Authenticate to temporary validation environment
         id: target_auth

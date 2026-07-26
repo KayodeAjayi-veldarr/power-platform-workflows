@@ -190,8 +190,14 @@ on:
 
       environment_create_async:
         required: false
-        default: true
+        default: false
         type: boolean
+
+      environment_stabilization_seconds:
+        description: Seconds to wait after creating a new environment before importing a solution
+        required: false
+        default: 180
+        type: number
 
       assign_automation_user:
         required: false
@@ -1049,6 +1055,24 @@ jobs:
           "environment_id=$environmentId" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "environment_url=$environmentUrl" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "environment_type=$environmentType" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Wait for new developer environment readiness
+        if: steps.find_environment.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          WAIT_SECONDS: ${{ inputs.environment_stabilization_seconds }}
+          ENVIRONMENT_NAME: ${{ steps.names.outputs.environment_name }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $seconds = [int]$env:WAIT_SECONDS
+          if ($seconds -le 0) {
+            Write-Host "No stabilization wait configured for $env:ENVIRONMENT_NAME."
+            exit 0
+          }
+
+          Write-Host "Waiting $seconds seconds for Dataverse provisioning to settle in $env:ENVIRONMENT_NAME."
+          Start-Sleep -Seconds $seconds
 
       - name: Assign automation application user
         if: inputs.assign_automation_user
