@@ -7,6 +7,11 @@ on:
         description: Short project identifier
         required: true
         type: string
+      pac_cli_version:
+        description: Power Platform CLI version installed by microsoft/powerplatform-actions
+        required: false
+        default: 2.9.3
+        type: string
       source_ref:
         description: Branch, tag or commit containing the solution source
         required: true
@@ -172,6 +177,7 @@ jobs:
         uses: microsoft/powerplatform-actions/actions-install@v1
         with:
           add-tools-to-path: "true"
+          pac-version-override: ${{ inputs.pac_cli_version }}
 
       - name: Validate deployment inputs
         shell: pwsh
