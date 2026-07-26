@@ -98,58 +98,16 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REQUESTED_FOLDER: ${{ inputs.solution_folder }}
           DEFAULT_FOLDER: "__DEFAULT_SOLUTION_FOLDER__"
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           $ErrorActionPreference = "Stop"
 
-          $selectedFolder = ""
+          $selectedFolder = $env:DEFAULT_FOLDER
 
           if ($env:EVENT_NAME -eq "workflow_dispatch") {
-            $selectedFolder = $env:REQUESTED_FOLDER
+            $requestedFolder = [string]$env:REQUESTED_FOLDER
 
-            if ([string]::IsNullOrWhiteSpace($selectedFolder)) {
-              $selectedFolder = $env:DEFAULT_FOLDER
-            }
-          }
-          else {
-            $changedFiles = @()
-
-            if (
-              -not [string]::IsNullOrWhiteSpace($env:BASE_SHA) -and
-              -not [string]::IsNullOrWhiteSpace($env:HEAD_SHA)
-            ) {
-              $changedFiles = @(
-                git diff --name-only "$($env:BASE_SHA)" "$($env:HEAD_SHA)"
-              )
-
-              if ($LASTEXITCODE -ne 0) {
-                throw "Could not inspect the pull request changes."
-              }
-            }
-
-            $candidateFolders = @(
-              foreach ($changedFile in $changedFiles) {
-                $normalisedPath = ([string]$changedFile).Replace('\', '/')
-
-                if ($normalisedPath -match '^(?<folder>.+?)/src(?:/|$)') {
-                  $Matches.folder
-                }
-              }
-            ) | Sort-Object -Unique
-
-            if ($candidateFolders.Count -eq 1) {
-              $selectedFolder = $candidateFolders[0]
-            }
-            elseif ($candidateFolders.Count -gt 1) {
-              throw (
-                "More than one solution folder changed in this pull request: " +
-                ($candidateFolders -join ', ') +
-                ". Run the workflow manually and select one folder, or split the changes into separate pull requests."
-              )
-            }
-            else {
-              $selectedFolder = $env:DEFAULT_FOLDER
+            if (-not [string]::IsNullOrWhiteSpace($requestedFolder)) {
+              $selectedFolder = $requestedFolder
             }
           }
 
