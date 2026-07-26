@@ -1,108 +1,35 @@
-# Power Platform GitHub Workflows v26
+# Power Platform GitHub Workflows
 
-This repository contains reusable GitHub Actions workflows:
-
-```text
-.github/workflows/
-├── manage-power-platform-development-environment.yml
-├── commit-feature-changes.yml
-├── validate-pull-request.yml
-├── deploy-solution.yml
-└── bootstrap-project-workflows.yml
-```
-
-The project repository contains small caller workflows generated from
-`project-workflows-template`, including a lightweight configure workflow that can
-bootstrap the project from GitHub Actions.
-
-## What changed in v26
-
-### Conservative connection handling
-
-The generated project workflows no longer create connections, select existing
-connections, generate deployment mappings, or stop an import because a
-connection reference is unresolved.
-
-The standard import behaviour is now:
+Reusable GitHub Actions workflows for moving Power Platform solutions through a simple ALM flow:
 
 ```text
-Create or resolve environment
-  → import the exact solution package without a deployment-settings file
-  → do not request flow or plug-in activation
-  → allow unresolved connection references and inactive flows
-  → record the connection references in the workflow artifact for manual setup
+make a feature branch
+manage a Power Platform development environment
+export and commit solution changes
+validate a pull request in a clean temporary environment
+build a managed release
+import the managed release into the target environment
 ```
 
-This is the safer default for dynamically created environments because the
-workflow does not guess which identity or connection should be used.
+The workflows are designed for low-code teams who want GitHub version control without making every maker learn YAML, PAC CLI, or repository plumbing first.
 
-After import, a maker or administrator can create the required connections,
-update the connection references, and turn on the affected flows.
+## What You Get
 
-The reusable workflows still contain the advanced automatic binding capability,
-but it is disabled by default and the generated caller workflows do not expose
-it. It should be enabled only where connection identities and mapping rules have
-been deliberately designed.
+This repo contains reusable workflows for:
 
-### Exact packages and build-environment releases
+- `manage-power-platform-development-environment.yml` - **1. Manage Power Platform Development Environment**: create, reuse, or delete a development environment and sync a solution baseline.
+- `commit-feature-changes.yml` - **2. Commit Feature Changes**: export an unmanaged solution from a developer environment and commit the unpacked source.
+- `validate-pull-request.yml` - **3. Validate Power Platform Pull Request**: pack the solution and validate it in a temporary Power Platform environment.
+- `deploy-solution.yml` - **4. Build and Deploy Solution**: build a managed release through a clean build environment and deploy it to a target environment.
+- `bootstrap-project-workflows.yml` - generate the small caller workflows that live in each project repository.
 
-Source and feature exports are still saved before unpacking:
+Generated project repositories also get `configure-project-workflows.yml`, which lets you set up the project from GitHub Actions instead of running PowerShell locally.
 
-```text
-<solution_folder>/package/source/
-├── <solution>_unmanaged.zip
-└── <solution>_unmanaged.zip.sha256
-```
+## Requirements
 
-Managed downstream releases still use the build-environment pattern:
+Your project repository needs GitHub Actions enabled with read/write workflow permissions.
 
-```text
-Git source
-  → pack unmanaged build input
-  → import into the build environment
-  → export an exact managed ZIP
-  → commit the managed ZIP and SHA256
-  → import that exact managed ZIP into the target environment
-```
-
-The managed release is stored under:
-
-```text
-<solution_folder>/package/release/<solution>_managed.zip
-```
-
-### Feature workspace names
-
-When no workspace environment name is entered, the generated name includes the
-feature branch. Different feature branches therefore receive different default
-environment names.
-
-## Project setup
-
-There are two supported setup paths.
-
-### GitHub bootstrap
-
-Use this repository as a starter/template, or copy only
-`.github/workflows/configure-project-workflows.yml` into a new project
-repository. Run **Configure Project Workflows** from the Actions tab and enter
-only the project values: project key, solution name, solution folder, developer
-alias, developer UPN, and base branch.
-
-The bootstrap workflow calls the shared reusable workflow, generates the project
-caller workflows, and commits them back to the selected branch using the
-repository `GITHUB_TOKEN`. No extra secret is required.
-
-### Local setup
-
-Populate `project-workflows-template/PROJECT-DETAILS.txt`, then run:
-
-```powershell
-.\project-workflows-template\Install-ProjectWorkflows.ps1 -Force
-```
-
-No project-level GitHub Actions variables are required. The project repository
-must have access to:
+It must have access to these GitHub Actions secrets, usually as organisation secrets:
 
 ```text
 PP_TENANT_ID
@@ -110,25 +37,100 @@ PP_APP_ID
 PP_CLIENT_SECRET
 ```
 
-For managed releases, enter a clean build environment in the deployment form or
-set `Default build environment` in `PROJECT-DETAILS.txt`.
+The Entra application behind those secrets must be able to access the Power Platform environments and perform solution import/export. For environment creation and deletion, it also needs the tenant permissions required by Power Platform administration.
 
-## Normal lifecycle
+For the full repository checklist, see `REPOSITORY-SETTINGS.txt`.
+
+## Quick Setup
+
+### Option 1: Start From The Template
+
+Create a new repository from this template repository.
+
+In the new project repository, open **Actions** and run **0. Configure Project Workflows**. Enter:
+
+- project key, for example `chess-demo`
+- solution unique name, for example `ChessPlayingAgent`
+- default solution folder, for example `power-platform-solution`
+- developer alias
+- developer UPN
+- base branch, usually `main`
+- optional build environment
+
+The workflow commits the generated project workflows back to the repository using `GITHUB_TOKEN`. No extra secret is required.
+
+### Option 2: Add To An Existing Repo
+
+Copy this file into the existing project repository:
 
 ```text
-Create feature branch
-  → manage Power Platform development environment
-  → exact source ZIP committed immediately
-  → solution imported with connection references left for manual setup
-  → make changes
-  → exact feature export and unpacked source committed
-  → pull request validation in a clean temporary environment
-  → merge to main
-  → build managed release in build environment
-  → deploy exact managed release to target
-  → configure target connections and enable affected flows when required
+project-workflows-template/.github/workflows/configure-project-workflows.yml
 ```
 
-Azure Boards linking remains available through `AB#<work-item-id>` references in
-commit messages.
+Commit it, then run **0. Configure Project Workflows** from the Actions tab.
 
+### Option 3: Local Setup
+
+Populate `project-workflows-template/PROJECT-DETAILS.txt`, then run:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\project-workflows-template\Install-ProjectWorkflows.ps1 -Force
+```
+
+## Normal Workflow
+
+1. Create a feature branch.
+2. Run **1. Manage Power Platform Development Environment** to prepare or reuse a developer environment.
+3. Make changes in Power Platform.
+4. Run **2. Commit Feature Changes** to export and commit the solution source.
+5. Open a pull request.
+6. Let **3. Validate Power Platform Pull Request** test the solution in a temporary environment.
+7. Merge to `main`.
+8. Run **4. Build and Deploy Solution** to build and import the managed release.
+
+## Important Defaults
+
+The generated workflows use conservative import behaviour:
+
+- they do not create or guess connector connections
+- they do not automatically bind connection references
+- they allow unresolved connection references during import
+- affected cloud flows may need to be turned on manually after connections are configured
+
+This avoids binding a solution to the wrong identity. Advanced connection binding exists in the reusable workflows, but it is not exposed by default.
+
+Managed deployments should use a clean build environment. The workflow imports unmanaged source there, exports a managed ZIP, stores that ZIP in the repo, and imports the exact same ZIP into the target environment.
+
+Azure Boards linking works through commit messages containing `AB#<work-item-id>`. No Azure DevOps PAT is required when the Azure Boards GitHub integration is connected.
+
+## AI Setup Prompt
+
+Use this prompt with Codex or ChatGPT when setting up a new project repository:
+
+```text
+I want to set up this repository to use KayodeAjayi-veldarr/power-platform-workflows for Power Platform ALM.
+
+Please inspect the repository first, then help me configure the generated GitHub Actions workflows without adding project-level Actions variables or extra secrets.
+
+Project details:
+- Project key: <short-project-key>
+- Power Platform solution unique name: <solution-name>
+- Default solution folder: <repo-folder-for-solution-source>
+- Base branch: main
+- Default developer alias: <name>
+- Default developer UPN: <email>
+- Build environment, if known: <environment-name-or-url>
+
+Use the GitHub bootstrap workflow if it is present. If it is not present, add the smallest configure-project-workflows.yml caller workflow, then run or explain the setup steps.
+
+Keep PP_TENANT_ID, PP_APP_ID, and PP_CLIENT_SECRET as the only required Power Platform secrets. Do not create Azure DevOps secrets. Preserve unrelated files and existing workflow conventions.
+
+After setup, verify the generated workflows parse as YAML and explain the normal maker workflow in plain English.
+```
+
+## Troubleshooting
+
+- If a reusable workflow cannot be found, confirm this repo is accessible to the project repository from GitHub Actions settings.
+- If commits or pull requests fail, confirm workflow permissions are set to read/write and Actions can create pull requests.
+- If Power Platform commands fail, confirm the three PP secrets are available to the repository and the Entra application has access to the target environments.
+- If imports complete with connection reference warnings, configure the connections in the target environment and turn on the affected flows manually.

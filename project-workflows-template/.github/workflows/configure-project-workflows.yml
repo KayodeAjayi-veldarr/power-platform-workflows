@@ -1,4 +1,4 @@
-name: Configure Project Workflows
+name: 0. Configure Project Workflows
 
 run-name: >-
   Configure Power Platform workflows for ${{ inputs.solution_name }}
@@ -60,4 +60,3 @@ jobs:
       default_build_environment: ${{ inputs.default_build_environment }}
       reusable_workflow_repository: KayodeAjayi-Veldarr/power-platform-workflows
       reusable_workflow_ref: main
-
