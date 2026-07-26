@@ -1,17 +1,19 @@
 # Power Platform GitHub Workflows v26
 
-This repository contains four reusable GitHub Actions workflows:
+This repository contains reusable GitHub Actions workflows:
 
 ```text
 .github/workflows/
 ├── manage-feature-workspace.yml
 ├── commit-feature-changes.yml
 ├── validate-pull-request.yml
-└── deploy-solution.yml
+├── deploy-solution.yml
+└── bootstrap-project-workflows.yml
 ```
 
-The project repository contains four small caller workflows generated from
-`project-workflows-template`.
+The project repository contains small caller workflows generated from
+`project-workflows-template`, including a lightweight configure workflow that can
+bootstrap the project from GitHub Actions.
 
 ## What changed in v26
 
@@ -77,6 +79,22 @@ environment names.
 
 ## Project setup
 
+There are two supported setup paths.
+
+### GitHub bootstrap
+
+Use this repository as a starter/template, or copy only
+`.github/workflows/configure-project-workflows.yml` into a new project
+repository. Run **Configure Project Workflows** from the Actions tab and enter
+only the project values: project key, solution name, solution folder, developer
+alias, developer UPN, and base branch.
+
+The bootstrap workflow calls the shared reusable workflow, generates the project
+caller workflows, and commits them back to the selected branch using the
+repository `GITHUB_TOKEN`. No extra secret is required.
+
+### Local setup
+
 Populate `project-workflows-template/PROJECT-DETAILS.txt`, then run:
 
 ```powershell
@@ -113,3 +131,4 @@ Create feature branch
 
 Azure Boards linking remains available through `AB#<work-item-id>` references in
 commit messages.
+

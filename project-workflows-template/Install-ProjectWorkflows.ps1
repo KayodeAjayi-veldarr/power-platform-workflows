@@ -253,7 +253,7 @@ Run again with -Force only when you intend to replace the existing caller workfl
 }
 
 Write-Host ""
-Write-Host "Installed the four caller workflows in:"
+Write-Host "Installed the caller workflows in:"
 Write-Host $destinationWorkflows
 Write-Host ""
 Write-Host "Project: $projectKey"
@@ -270,3 +270,4 @@ Write-Host "2. Apply the central repository settings checklist from the power-pl
 Write-Host "3. Confirm a clean build environment is available for managed deployments."
 Write-Host "4. Review the generated workflow defaults."
 Write-Host "5. Commit .github/workflows to $baseBranch."
+
