@@ -1,4 +1,4 @@
-name: Reusable - Manage Power Platform Feature Workspace
+name: Reusable - Manage Power Platform Development Environment
 
 on:
   workflow_call:
@@ -434,7 +434,7 @@ jobs:
     needs: validate
     if: inputs.workspace_action == 'PrepareOrReuse'
 
-    name: Start feature workspace
+    name: Manage Power Platform development environment
     runs-on: windows-latest
     timeout-minutes: 150
 
@@ -1842,3 +1842,4 @@ jobs:
 
           **Deletion status:** ``$env:STATUS``
           "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+

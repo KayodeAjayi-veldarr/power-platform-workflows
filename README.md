@@ -4,7 +4,7 @@ This repository contains reusable GitHub Actions workflows:
 
 ```text
 .github/workflows/
-├── manage-feature-workspace.yml
+├── manage-power-platform-development-environment.yml
 ├── commit-feature-changes.yml
 ├── validate-pull-request.yml
 ├── deploy-solution.yml
@@ -117,7 +117,7 @@ set `Default build environment` in `PROJECT-DETAILS.txt`.
 
 ```text
 Create feature branch
-  → prepare feature workspace
+  → manage Power Platform development environment
   → exact source ZIP committed immediately
   → solution imported with connection references left for manual setup
   → make changes

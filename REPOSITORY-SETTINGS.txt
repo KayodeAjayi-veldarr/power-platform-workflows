@@ -97,7 +97,7 @@ Microsoft Entra application:
 After granting the project repository access to them, uncomment the matching
 secret mappings in:
 
-    .github/workflows/manage-feature-workspace.yml
+    .github/workflows/manage-power-platform-development-environment.yml
 
 ----------------------------------------------------------------------
 5. DEFAULT BRANCH
@@ -172,3 +172,4 @@ not transported in solution ZIP files.
 Advanced automatic binding remains available in the reusable workflows but is
 disabled in the generated project workflows. Enable it only when the connection
 identity and mapping rules have been deliberately defined for that environment.
+
