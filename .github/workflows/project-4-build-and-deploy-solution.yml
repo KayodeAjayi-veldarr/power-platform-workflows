@@ -9,7 +9,7 @@ on:
     inputs:
       source_ref:
         description: Approved branch, tag or commit to release. Usually main after the PR is merged.
-        required: true
+        required: false
         default: main
         type: string
       solution_folder:
@@ -28,7 +28,7 @@ on:
         type: string
       solution_package_type:
         description: Managed is recommended for test/UAT/production. Use Unmanaged only for special cases.
-        required: true
+        required: false
         default: Managed
         type: choice
         options:
@@ -36,7 +36,7 @@ on:
           - Unmanaged
       commit_solution_zip:
         description: Store the exact generated release ZIP in the repo for traceability.
-        required: true
+        required: false
         default: true
         type: boolean
 

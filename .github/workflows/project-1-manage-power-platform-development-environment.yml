@@ -9,7 +9,7 @@ on:
     inputs:
       workspace_action:
         description: PrepareOrReuse creates/reuses a maker dev environment; DeleteEnvironment removes one.
-        required: true
+        required: false
         default: PrepareOrReuse
         type: choice
         options:
@@ -52,7 +52,7 @@ on:
         type: string
       workspace_environment_type:
         description: Type for a newly created environment. Developer is best for individual maker work.
-        required: true
+        required: false
         default: Developer
         type: choice
         options:
@@ -76,7 +76,7 @@ on:
         type: string
       workspace_environment_mode:
         description: ReuseOrCreate is normal. CreateOnly fails if the generated environment already exists.
-        required: true
+        required: false
         default: ReuseOrCreate
         type: choice
         options:
@@ -89,7 +89,7 @@ on:
         type: string
       commit_baseline_to_branch:
         description: Commit the exported source baseline to the current branch after prepare/reuse.
-        required: true
+        required: false
         default: true
         type: boolean
       baseline_commit_message:

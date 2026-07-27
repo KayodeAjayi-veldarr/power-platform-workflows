@@ -18,12 +18,12 @@ on:
         type: string
       to_ref:
         description: Branch, tag, or commit to report up to. Usually main.
-        required: true
+        required: false
         default: main
         type: string
       commit_release_notes:
         description: Commit the generated markdown file to the repository.
-        required: true
+        required: false
         default: false
         type: boolean
 

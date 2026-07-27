@@ -22,7 +22,7 @@ on:
         type: string
       validation_environment_type:
         description: Temporary environment type for validation. Sandbox is the normal choice.
-        required: true
+        required: false
         default: Sandbox
         type: choice
         options:
@@ -45,17 +45,17 @@ on:
         type: string
       retain_validation_environment_on_failure:
         description: Keep the temporary environment after a failed validation so a maker can inspect it.
-        required: true
+        required: false
         default: false
         type: boolean
       run_solution_checker:
         description: Run Power Apps Solution Checker after import.
-        required: true
+        required: false
         default: true
         type: boolean
       checker_fail_on_errors:
         description: Fail the workflow if Solution Checker reports error-level findings.
-        required: true
+        required: false
         default: false
         type: boolean
 
