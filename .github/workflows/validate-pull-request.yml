@@ -1,4 +1,4 @@
-name: Reusable - Validate Power Platform Pull Request
+name: 3. Reusable - Validate Power Platform Pull Request
 
 on:
   workflow_call:

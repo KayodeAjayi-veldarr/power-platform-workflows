@@ -1,4 +1,4 @@
-name: Reusable - Bootstrap Power Platform Project Workflows
+name: 0. Reusable - Bootstrap Power Platform Project Workflows
 
 on:
   workflow_call:

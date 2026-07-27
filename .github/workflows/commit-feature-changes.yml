@@ -1,4 +1,4 @@
-name: Reusable - Commit Power Platform Feature Changes
+name: 2. Reusable - Commit Solution Changes
 
 on:
   workflow_call:

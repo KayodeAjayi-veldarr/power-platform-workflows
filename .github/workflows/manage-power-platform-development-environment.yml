@@ -1,4 +1,4 @@
-name: Reusable - Manage Power Platform Development Environment
+name: 1. Reusable - Manage Power Platform Development Environment
 
 on:
   workflow_call:
