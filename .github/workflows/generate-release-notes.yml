@@ -28,11 +28,6 @@ on:
         required: false
         default: ""
         type: string
-      azure_work_items_json:
-        description: Optional verified Azure Boards details from an agent, as JSON array or object keyed by ID
-        required: false
-        default: ""
-        type: string
       commit_release_notes:
         description: Commit the generated release notes markdown file to the repository
         required: false
@@ -59,6 +54,10 @@ on:
         value: ${{ jobs.release_notes.outputs.unverified_work_item_count }}
       flagged_work_item_count:
         value: ${{ jobs.release_notes.outputs.flagged_work_item_count }}
+    secrets:
+      azure_devops_pat:
+        description: Optional Azure DevOps PAT with read access to work items
+        required: false
 
 permissions:
   contents: write
@@ -95,7 +94,7 @@ jobs:
           TO_REF: ${{ inputs.to_ref }}
           ADO_ORG: ${{ inputs.azure_devops_organisation }}
           ADO_PROJECT: ${{ inputs.azure_devops_project }}
-          WORK_ITEMS_JSON: ${{ inputs.azure_work_items_json }}
+          ADO_PAT: ${{ secrets.azure_devops_pat }}
           NOTES_FOLDER: ${{ inputs.release_notes_folder }}
         run: |
           $ErrorActionPreference = "Stop"
@@ -113,47 +112,59 @@ jobs:
           function Get-ObjectValue($Object, [string[]]$Names) {
             if ($null -eq $Object) { return "" }
             foreach ($name in $Names) {
-              $current = $Object
-              $found = $true
-              foreach ($segment in ($name -split '\.')) {
-                if ($null -eq $current) {
-                  $found = $false
-                  break
-                }
-                $property = $current.PSObject.Properties[$segment]
-                if ($null -eq $property) {
-                  $found = $false
-                  break
-                }
-                $current = $property.Value
-              }
-              if ($found -and -not [string]::IsNullOrWhiteSpace([string]$current)) {
-                return [string]$current
+              $property = $Object.PSObject.Properties[$name]
+              if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+                return [string]$property.Value
               }
             }
             return ""
           }
 
-          function Get-WorkItemMap([string]$Json) {
+          function Get-FieldValue($Object, [string]$FieldName) {
+            if ($null -eq $Object -or $null -eq $Object.fields) { return "" }
+            $property = $Object.fields.PSObject.Properties[$FieldName]
+            if ($null -eq $property -or [string]::IsNullOrWhiteSpace([string]$property.Value)) { return "" }
+            return [string]$property.Value
+          }
+
+          function Get-AzureWorkItemMap([string[]]$Ids) {
             $map = @{}
-            if ([string]::IsNullOrWhiteSpace($Json)) { return $map }
+            $idList = @($Ids | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object {[int]$_} -Unique)
+            if ($idList.Count -eq 0) { return $map }
+            if ([string]::IsNullOrWhiteSpace($env:ADO_ORG) -or [string]::IsNullOrWhiteSpace($env:ADO_PROJECT)) {
+              Write-Warning "Azure DevOps organisation or project is not configured. Work item statuses will not be verified."
+              return $map
+            }
+            if ([string]::IsNullOrWhiteSpace($env:ADO_PAT)) {
+              Write-Warning "AZURE_DEVOPS_PAT secret is not configured. Work item statuses will not be verified."
+              return $map
+            }
+
             try {
-              $parsed = $Json | ConvertFrom-Json
-              if ($parsed -is [System.Array]) {
-                foreach ($item in @($parsed)) {
-                  if ($null -eq $item) { continue }
-                  $id = Get-ObjectValue $item @('id','Id','workItemId','WorkItemId')
-                  if (-not [string]::IsNullOrWhiteSpace($id)) { $map[$id.Trim()] = $item }
-                }
+              $encodedProject = [uri]::EscapeDataString($env:ADO_PROJECT)
+              $uri = "https://dev.azure.com/$env:ADO_ORG/$encodedProject/_apis/wit/workitemsbatch?api-version=7.1"
+              $basicToken = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$env:ADO_PAT"))
+              $headers = @{
+                Authorization = "Basic $basicToken"
+                Accept = "application/json"
               }
-              else {
-                foreach ($property in $parsed.PSObject.Properties) {
-                  $map[[string]$property.Name] = $property.Value
+              $body = @{
+                ids = @($idList | ForEach-Object { [int]$_ })
+                fields = @("System.Id","System.Title","System.WorkItemType","System.State")
+                errorPolicy = "Omit"
+              } | ConvertTo-Json -Depth 5
+
+              $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Body $body
+              foreach ($item in @($response.value)) {
+                if ($null -eq $item) { continue }
+                $id = Get-FieldValue $item "System.Id"
+                if (-not [string]::IsNullOrWhiteSpace($id)) {
+                  $map[$id.Trim()] = $item
                 }
               }
             }
             catch {
-              throw "azure_work_items_json must be valid JSON. Use an array like [{`"id`":485,`"title`":`"Instruction screen`",`"type`":`"User Story`",`"state`":`"Resolved`"}]."
+              Write-Warning "Azure DevOps work item lookup failed. Work item statuses will not be verified. $($_.Exception.Message)"
             }
             return $map
           }
@@ -229,15 +240,18 @@ jobs:
             }
           }
 
-          $workItemMap = Get-WorkItemMap $env:WORK_ITEMS_JSON
+          $workItemMap = Get-AzureWorkItemMap @($workItemRefs.Keys)
           $workItems = @()
           $unverified = 0
           $flagged = 0
           foreach ($id in @($workItemRefs.Keys | Sort-Object {[int]$_})) {
             $item = $workItemMap[$id]
-            $title = Get-ObjectValue $item @('title','Title','fields.System.Title')
-            $type = Get-ObjectValue $item @('type','Type','fields.System.WorkItemType')
-            $state = Get-ObjectValue $item @('state','State','fields.System.State')
+            $title = Get-ObjectValue $item @('title','Title')
+            if ([string]::IsNullOrWhiteSpace($title)) { $title = Get-FieldValue $item "System.Title" }
+            $type = Get-ObjectValue $item @('type','Type')
+            if ([string]::IsNullOrWhiteSpace($type)) { $type = Get-FieldValue $item "System.WorkItemType" }
+            $state = Get-ObjectValue $item @('state','State')
+            if ([string]::IsNullOrWhiteSpace($state)) { $state = Get-FieldValue $item "System.State" }
             if ([string]::IsNullOrWhiteSpace($title)) { $title = "Not verified by workflow" }
             if ([string]::IsNullOrWhiteSpace($type)) { $type = "Not verified" }
             if ([string]::IsNullOrWhiteSpace($state)) { $state = "Not verified"; $unverified++ }
@@ -351,7 +365,7 @@ jobs:
           $lines += ""
           if ($flagged -eq 0) { $lines += "- No linked work items were flagged." }
           else { $lines += "- $flagged linked work item(s) are not verified as Resolved, Closed, or Done. Review them before release." }
-          if ($unverified -gt 0) { $lines += "- $unverified work item status value(s) were not provided to the workflow. Verify them in Azure DevOps or rerun with azure_work_items_json populated." }
+          if ($unverified -gt 0) { $lines += "- $unverified work item status value(s) could not be verified. Configure `AZURE_DEVOPS_PAT` or review them in Azure DevOps." }
           $lines += ""
           $lines += "## Deployment notes"
           $lines += ""

@@ -21,11 +21,6 @@ on:
         required: true
         default: main
         type: string
-      azure_work_items_json:
-        description: Optional verified Azure Boards details JSON from an AI agent. Leave blank to link IDs without verified status.
-        required: false
-        default: ""
-        type: string
       commit_release_notes:
         description: Commit the generated markdown file to the repository.
         required: true
@@ -73,7 +68,8 @@ jobs:
       to_ref: ${{ inputs.to_ref }}
       azure_devops_organisation: ${{ needs.project_settings.outputs.azure_devops_organisation }}
       azure_devops_project: ${{ needs.project_settings.outputs.azure_devops_project }}
-      azure_work_items_json: ${{ inputs.azure_work_items_json }}
       commit_release_notes: ${{ inputs.commit_release_notes }}
       release_notes_folder: release-notes
       artifact_retention_days: 30
+    secrets:
+      azure_devops_pat: ${{ secrets.AZURE_DEVOPS_PAT }}

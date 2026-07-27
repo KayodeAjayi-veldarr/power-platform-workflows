@@ -24,10 +24,11 @@ A repository created from this template does not need access to the original tem
    - `PP_TENANT_ID`
    - `PP_APP_ID`
    - `PP_CLIENT_SECRET`
-4. In GitHub, open `Settings > Actions > General`.
-5. Set workflow permissions to `Read and write permissions`.
-6. Enable `Allow GitHub Actions to create and approve pull requests`.
-7. Use the numbered workflows in the Actions tab.
+4. Optional: add `AZURE_DEVOPS_PAT` if **5. Generate Release Notes** should read Azure Boards work item title, type, and state.
+5. In GitHub, open `Settings > Actions > General`.
+6. Set workflow permissions to `Read and write permissions`.
+7. Enable `Allow GitHub Actions to create and approve pull requests`.
+8. Use the numbered workflows in the Actions tab.
 
 No project-level GitHub Actions variables are required.
 
@@ -182,14 +183,13 @@ Outputs to look for:
 
 ## Workflow 5: Generate Release Notes
 
-Use this when preparing a release summary after changes have been merged, or when an AI agent needs a repeatable way to document what is included in a release.
+Use this when preparing a release summary after changes have been merged.
 
 | Input | What to enter |
 | --- | --- |
 | `release_name` | Optional title for the release notes, for example `Chess Copilot July release`. |
 | `from_ref` | Previous release tag, commit, or branch. Leave blank to use the latest reachable Git tag. If no tag exists, the workflow uses the first commit. |
 | `to_ref` | Branch, tag, or commit to report up to. Usually `main`. |
-| `azure_work_items_json` | Optional verified Azure Boards details from an AI agent. Leave blank if you only want `AB#` links and unverified statuses. |
 | `commit_release_notes` | `true` to commit the generated markdown file under `release-notes`. `false` keeps it as a workflow artifact only. |
 
 Optional project config fields:
@@ -201,27 +201,18 @@ Optional project config fields:
 }
 ```
 
-The workflow does not require an Azure DevOps secret. It extracts `AB#123` references from commit messages and pull request titles. To include verified work item title, type, and state, give the workflow `azure_work_items_json` populated by an AI agent or another trusted source that can read Azure DevOps.
+The workflow extracts `AB#123` references from commit messages and pull request titles.
 
-Example `azure_work_items_json`:
+To include verified Azure Boards work item title, type, and state, add a repository secret named `AZURE_DEVOPS_PAT`. The token only needs read access to work items in the configured Azure DevOps project.
 
-```json
-[
-  {
-    "id": 485,
-    "title": "Instruction screen",
-    "type": "User Story",
-    "state": "Resolved"
-  }
-]
-```
+If `AZURE_DEVOPS_PAT` is not configured, the workflow still generates release notes and links `AB#` references, but work item title, type, and state are marked as not verified.
 
 Outputs to look for:
 
 - Release notes markdown in the workflow summary
 - Release notes artifact
 - Optional committed file under `release-notes`
-- Work items flagged when their state is not `Resolved`, `Closed`, or `Done`
+- Work items flagged when their verified state is not `Resolved`, `Closed`, or `Done`
 
 ## Publishing Behaviour
 
@@ -275,7 +266,7 @@ Project details:
 - Default developer UPN: <email>
 - Build environment, if known: <environment-name-or-url>
 
-Please update .github/power-platform-project.json only. Keep PP_TENANT_ID, PP_APP_ID, and PP_CLIENT_SECRET as the only required Power Platform secrets. Do not add Azure DevOps secrets or project-level GitHub Actions variables. Preserve unrelated files.
+Please update .github/power-platform-project.json only. Keep PP_TENANT_ID, PP_APP_ID, and PP_CLIENT_SECRET as the only required Power Platform secrets. Add AZURE_DEVOPS_PAT only if release notes should verify Azure Boards work item state. Do not add project-level GitHub Actions variables. Preserve unrelated files.
 
 After setup, verify the workflow YAML references local reusable workflows and explain the normal maker workflow in plain English.
 ```
@@ -295,7 +286,7 @@ Only the numbered workflows are user-facing:
 4. Build and Deploy Solution
 5. Generate Release Notes
 
-Explain which workflow to run next, which inputs to fill in, which values can be left blank because they come from project config, and what output should confirm success. Do not ask for new secrets unless the existing PP_TENANT_ID, PP_APP_ID, and PP_CLIENT_SECRET are genuinely missing or inaccessible. For release notes, use Workflow 5. If Azure DevOps work item status is needed, read it with an available Azure DevOps tool and pass it into azure_work_items_json; do not invent statuses.
+Explain which workflow to run next, which inputs to fill in, which values can be left blank because they come from project config, and what output should confirm success. Do not ask for new Power Platform secrets unless the existing PP_TENANT_ID, PP_APP_ID, and PP_CLIENT_SECRET are genuinely missing or inaccessible. For release notes, use Workflow 5. If Azure DevOps work item status is needed, confirm AZURE_DEVOPS_PAT is configured; do not invent statuses.
 ```
 
 ## Troubleshooting
@@ -307,4 +298,4 @@ Explain which workflow to run next, which inputs to fill in, which values can be
 - If export misses recent Canvas app changes, save and publish the Canvas app in Power Apps, then rerun **2. Commit Solution Changes**.
 - If import/export fails, confirm the Entra app exists as an application user in the relevant environments and has the required Dataverse role.
 - If Azure Boards links do not appear, confirm the Azure Boards GitHub app is connected to the repository and the commit or PR contains `AB#<id>`.
-- If release notes show `Not verified` for work item state, rerun **5. Generate Release Notes** with `azure_work_items_json` populated from Azure DevOps.
+- If release notes show `Not verified` for work item state, configure `AZURE_DEVOPS_PAT`, confirm `azure_devops_organisation` and `azure_devops_project`, then rerun **5. Generate Release Notes**.
