@@ -1,0 +1,217 @@
+name: 1. Manage Power Platform Development Environment
+
+run-name: >-
+  ${{ inputs.workspace_action }} Power Platform dev environment for
+  ${{ inputs.developer_alias || 'configured maker' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      workspace_action:
+        description: Prepare or remove a Power Platform development environment
+        required: true
+        default: PrepareOrReuse
+        type: choice
+        options:
+          - PrepareOrReuse
+          - DeleteEnvironment
+      developer_alias:
+        description: Short developer identifier. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      developer_upn:
+        description: Developer Microsoft 365 email address. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      source_environment:
+        description: Source environment name, URL, ID or unique name
+        required: false
+        default: ""
+        type: string
+      source_solution_name:
+        description: Solution unique name in the source environment. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      solution_folder:
+        description: Repository folder to use for this solution run. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      workspace_environment:
+        description: PrepareOrReuse generates when blank. DeleteEnvironment requires environment name, URL or ID.
+        required: false
+        default: ""
+        type: string
+      workspace_environment_domain:
+        description: Dataverse domain used only when creating a new environment
+        required: false
+        default: ""
+        type: string
+      workspace_environment_type:
+        description: Environment type used only when creating a new environment
+        required: true
+        default: Developer
+        type: choice
+        options:
+          - Developer
+          - Sandbox
+          - Trial
+      workspace_environment_region:
+        description: Region used only when creating a new environment. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      workspace_environment_currency:
+        description: Currency code used only when creating a new environment. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      workspace_environment_language:
+        description: Language used only when creating a new environment. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      workspace_environment_mode:
+        description: Reuse an existing environment or require a new one
+        required: true
+        default: ReuseOrCreate
+        type: choice
+        options:
+          - ReuseOrCreate
+          - CreateOnly
+      deletion_confirmation:
+        description: Required only for deletion. Enter DELETE:resolved-environment-name
+        required: false
+        default: ""
+        type: string
+      commit_baseline_to_branch:
+        description: Commit the source-environment baseline to this branch
+        required: true
+        default: true
+        type: boolean
+      baseline_commit_message:
+        description: Baseline commit message. Leave blank to generate from project config.
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  project_settings:
+    name: Read project settings
+    runs-on: ubuntu-latest
+    outputs:
+      project_key: ${{ steps.settings.outputs.project_key }}
+      solution_name: ${{ steps.settings.outputs.solution_name }}
+      solution_folder: ${{ steps.settings.outputs.default_solution_folder }}
+      default_developer_alias: ${{ steps.settings.outputs.default_developer_alias }}
+      default_developer_upn: ${{ steps.settings.outputs.default_developer_upn }}
+      base_branch: ${{ steps.settings.outputs.base_branch }}
+      target_region: ${{ steps.settings.outputs.target_region }}
+      target_currency: ${{ steps.settings.outputs.target_currency }}
+      target_language: ${{ steps.settings.outputs.target_language }}
+      developer_environment_suffix: ${{ steps.settings.outputs.developer_environment_suffix }}
+      target_environment_templates: ${{ steps.settings.outputs.target_environment_templates }}
+      target_security_group_id: ${{ steps.settings.outputs.target_security_group_id }}
+      automation_role: ${{ steps.settings.outputs.automation_role }}
+      developer_role: ${{ steps.settings.outputs.developer_role }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Read project config
+        id: settings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          config_path = Path('.github/power-platform-project.json')
+          if not config_path.exists():
+              sys.exit('Missing .github/power-platform-project.json')
+          data = json.loads(config_path.read_text(encoding='utf-8'))
+          defaults = {
+              'default_solution_folder': 'power-platform-solution',
+              'base_branch': 'main',
+              'target_region': 'europe',
+              'target_currency': 'GBP',
+              'target_language': 'English',
+              'developer_environment_suffix': 'DEV',
+              'target_environment_templates': '',
+              'target_security_group_id': '',
+              'automation_role': 'System Administrator',
+              'developer_role': 'System Administrator'
+          }
+          required = ['project_key', 'solution_name', 'default_developer_alias', 'default_developer_upn']
+          for key in required:
+              value = str(data.get(key, '')).strip()
+              if not value or value.startswith('your-') or value.endswith('@example.com'):
+                  sys.exit(f'Configure {key} in .github/power-platform-project.json')
+          values = {**defaults, **{k: v for k, v in data.items() if v is not None}}
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              for key, value in values.items():
+                  text = str(value).replace('\r', '').replace('\n', ' ')
+                  print(f'{key}={text}', file=out)
+          PY
+
+  manage:
+    needs: project_settings
+    uses: KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/manage-power-platform-development-environment.yml@main
+    with:
+      workspace_action: ${{ inputs.workspace_action }}
+      project_key: ${{ needs.project_settings.outputs.project_key }}
+      branch_ref: ${{ github.ref_name }}
+      base_branch: ${{ needs.project_settings.outputs.base_branch }}
+      developer_alias: ${{ inputs.developer_alias || needs.project_settings.outputs.default_developer_alias }}
+      developer_upn: ${{ inputs.developer_upn || needs.project_settings.outputs.default_developer_upn }}
+      source_environment: ${{ inputs.source_environment }}
+      source_solution_name: ${{ inputs.source_solution_name || needs.project_settings.outputs.solution_name }}
+      source_export_managed: false
+      source_export_async: true
+      solution_name: ${{ needs.project_settings.outputs.solution_name }}
+      solution_project_folder: ${{ inputs.solution_folder || needs.project_settings.outputs.solution_folder }}
+      solution_source_folder: ${{ format('{0}/src', inputs.solution_folder || needs.project_settings.outputs.solution_folder) }}
+      solution_package_type: Unmanaged
+      auto_bind_connection_references: false
+      require_connection_bindings: false
+      provision_dataverse_connections: false
+      commit_baseline_to_branch: ${{ inputs.commit_baseline_to_branch }}
+      baseline_commit_message: ${{ inputs.baseline_commit_message || format('Sync {0} baseline from source environment', needs.project_settings.outputs.solution_name) }}
+      workspace_environment: ${{ inputs.workspace_environment }}
+      workspace_environment_domain: ${{ inputs.workspace_environment_domain }}
+      workspace_environment_suffix: ${{ needs.project_settings.outputs.developer_environment_suffix }}
+      workspace_environment_mode: ${{ inputs.workspace_environment_mode }}
+      workspace_environment_type: ${{ inputs.workspace_environment_type }}
+      workspace_environment_region: ${{ inputs.workspace_environment_region || needs.project_settings.outputs.target_region }}
+      workspace_environment_currency: ${{ inputs.workspace_environment_currency || needs.project_settings.outputs.target_currency }}
+      workspace_environment_language: ${{ inputs.workspace_environment_language || needs.project_settings.outputs.target_language }}
+      workspace_environment_templates: ${{ needs.project_settings.outputs.target_environment_templates }}
+      workspace_environment_security_group_id: ${{ needs.project_settings.outputs.target_security_group_id }}
+      environment_create_async: false
+      environment_stabilization_seconds: 180
+      assign_automation_user: true
+      automation_role: ${{ needs.project_settings.outputs.automation_role }}
+      assign_developer: true
+      developer_role: ${{ needs.project_settings.outputs.developer_role }}
+      force_overwrite: true
+      publish_changes: true
+      asynchronous_import: false
+      activate_plugins: false
+      deletion_confirmation: ${{ inputs.deletion_confirmation }}
+      expected_environment_name_prefix: ${{ format('{0}-', needs.project_settings.outputs.project_key) }}
+      allowed_environment_types: Developer,Sandbox,Trial,SubscriptionBasedTrial
+      asynchronous_delete: true
+      max_async_wait_minutes: 60
+      environment_lookup_attempts: 20
+      environment_lookup_delay_seconds: 30
+      upload_solution_artifact: true
+      artifact_retention_days: 7
+      next_step_message: Open the solution and begin work on the selected feature branch.
+    secrets:
+      pp_tenant_id: ${{ secrets.PP_TENANT_ID }}
+      pp_app_id: ${{ secrets.PP_APP_ID }}
+      pp_client_secret: ${{ secrets.PP_CLIENT_SECRET }}

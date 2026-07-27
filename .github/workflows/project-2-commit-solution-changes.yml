@@ -1,0 +1,135 @@
+name: 2. Commit Solution Changes
+
+run-name: >-
+  Commit Power Platform solution changes from ${{ inputs.developer_environment }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      developer_alias:
+        description: Short developer identifier
+        required: true
+        type: string
+      developer_environment:
+        description: Developer environment name, URL or ID
+        required: true
+        type: string
+      solution_folder:
+        description: Repository folder to update. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      commit_message:
+        description: Git commit message. Leave blank to generate from project config.
+        required: false
+        default: ""
+        type: string
+      azure_work_item_ids:
+        description: Azure Boards work item IDs, for example 123 or 123,456
+        required: false
+        default: ""
+        type: string
+      create_pull_request:
+        description: Create a pull request after pushing the solution changes
+        required: true
+        default: true
+        type: boolean
+      pull_request_title:
+        description: Leave blank to generate the title
+        required: false
+        default: ""
+        type: string
+      pull_request_draft:
+        description: Create the pull request as a draft
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  project_settings:
+    name: Read project settings
+    runs-on: ubuntu-latest
+    outputs:
+      project_key: ${{ steps.settings.outputs.project_key }}
+      solution_name: ${{ steps.settings.outputs.solution_name }}
+      solution_folder: ${{ steps.settings.outputs.default_solution_folder }}
+      base_branch: ${{ steps.settings.outputs.base_branch }}
+      target_region: ${{ steps.settings.outputs.target_region }}
+      target_currency: ${{ steps.settings.outputs.target_currency }}
+      target_language: ${{ steps.settings.outputs.target_language }}
+      checker_geo: ${{ steps.settings.outputs.checker_geo }}
+      checker_rule_set: ${{ steps.settings.outputs.checker_rule_set }}
+      default_build_environment: ${{ steps.settings.outputs.default_build_environment }}
+      validation_environment_templates: ${{ steps.settings.outputs.validation_environment_templates }}
+      validation_security_group_id: ${{ steps.settings.outputs.validation_security_group_id }}
+      automation_role: ${{ steps.settings.outputs.automation_role }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Read project config
+        id: settings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          config_path = Path('.github/power-platform-project.json')
+          if not config_path.exists():
+              sys.exit('Missing .github/power-platform-project.json')
+          data = json.loads(config_path.read_text(encoding='utf-8'))
+          defaults = {
+              'default_solution_folder': 'power-platform-solution',
+              'base_branch': 'main',
+              'target_region': 'europe',
+              'target_currency': 'GBP',
+              'target_language': 'English',
+              'checker_geo': 'UnitedKingdom',
+              'checker_rule_set': 'Solution Checker',
+              'default_build_environment': '',
+              'validation_environment_templates': '',
+              'validation_security_group_id': '',
+              'automation_role': 'System Administrator'
+          }
+          required = ['project_key', 'solution_name']
+          for key in required:
+              value = str(data.get(key, '')).strip()
+              if not value or value.startswith('your-'):
+                  sys.exit(f'Configure {key} in .github/power-platform-project.json')
+          values = {**defaults, **{k: v for k, v in data.items() if v is not None}}
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              for key, value in values.items():
+                  text = str(value).replace('\r', '').replace('\n', ' ')
+                  print(f'{key}={text}', file=out)
+          PY
+  commit:
+    needs: project_settings
+    uses: KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/commit-feature-changes.yml@main
+    with:
+      project_key: ${{ needs.project_settings.outputs.project_key }}
+      branch_ref: ${{ github.ref_name }}
+      base_branch: ${{ needs.project_settings.outputs.base_branch }}
+      developer_alias: ${{ inputs.developer_alias }}
+      developer_environment: ${{ inputs.developer_environment }}
+      solution_name: ${{ needs.project_settings.outputs.solution_name }}
+      solution_project_folder: ${{ inputs.solution_folder || needs.project_settings.outputs.solution_folder }}
+      solution_source_folder: ${{ format('{0}/src', inputs.solution_folder || needs.project_settings.outputs.solution_folder) }}
+      export_managed: false
+      export_async: true
+      commit_changes: true
+      push_changes: true
+      commit_message: ${{ inputs.commit_message || format('Sync {0} solution changes', needs.project_settings.outputs.solution_name) }}
+      azure_work_item_ids: ${{ inputs.azure_work_item_ids }}
+      create_pull_request: ${{ inputs.create_pull_request }}
+      pull_request_title: ${{ inputs.pull_request_title }}
+      pull_request_body: Power Platform changes exported from the developer environment.
+      pull_request_draft: ${{ inputs.pull_request_draft }}
+      upload_solution_artifact: true
+      artifact_retention_days: 7
+    secrets:
+      pp_tenant_id: ${{ secrets.PP_TENANT_ID }}
+      pp_app_id: ${{ secrets.PP_APP_ID }}
+      pp_client_secret: ${{ secrets.PP_CLIENT_SECRET }}

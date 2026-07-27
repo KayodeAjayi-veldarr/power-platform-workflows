@@ -1,0 +1,130 @@
+name: 4. Build and Deploy Solution
+
+run-name: >-
+  Build and deploy Power Platform solution from ${{ inputs.source_ref }}
+  to ${{ inputs.target_environment }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Branch, tag or commit to deploy
+        required: true
+        default: main
+        type: string
+      solution_folder:
+        description: Repository folder containing the solution source. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      build_environment:
+        description: Clean build environment name, URL or ID. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      target_environment:
+        description: Target environment name, URL or ID
+        required: true
+        type: string
+      solution_package_type:
+        description: Managed is recommended outside development
+        required: true
+        default: Managed
+        type: choice
+        options:
+          - Managed
+          - Unmanaged
+      commit_solution_zip:
+        description: Commit the exact release ZIP to this repository
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  project_settings:
+    name: Read project settings
+    runs-on: ubuntu-latest
+    outputs:
+      project_key: ${{ steps.settings.outputs.project_key }}
+      solution_name: ${{ steps.settings.outputs.solution_name }}
+      solution_folder: ${{ steps.settings.outputs.default_solution_folder }}
+      base_branch: ${{ steps.settings.outputs.base_branch }}
+      target_region: ${{ steps.settings.outputs.target_region }}
+      target_currency: ${{ steps.settings.outputs.target_currency }}
+      target_language: ${{ steps.settings.outputs.target_language }}
+      checker_geo: ${{ steps.settings.outputs.checker_geo }}
+      checker_rule_set: ${{ steps.settings.outputs.checker_rule_set }}
+      default_build_environment: ${{ steps.settings.outputs.default_build_environment }}
+      validation_environment_templates: ${{ steps.settings.outputs.validation_environment_templates }}
+      validation_security_group_id: ${{ steps.settings.outputs.validation_security_group_id }}
+      automation_role: ${{ steps.settings.outputs.automation_role }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Read project config
+        id: settings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          config_path = Path('.github/power-platform-project.json')
+          if not config_path.exists():
+              sys.exit('Missing .github/power-platform-project.json')
+          data = json.loads(config_path.read_text(encoding='utf-8'))
+          defaults = {
+              'default_solution_folder': 'power-platform-solution',
+              'base_branch': 'main',
+              'target_region': 'europe',
+              'target_currency': 'GBP',
+              'target_language': 'English',
+              'checker_geo': 'UnitedKingdom',
+              'checker_rule_set': 'Solution Checker',
+              'default_build_environment': '',
+              'validation_environment_templates': '',
+              'validation_security_group_id': '',
+              'automation_role': 'System Administrator'
+          }
+          required = ['project_key', 'solution_name']
+          for key in required:
+              value = str(data.get(key, '')).strip()
+              if not value or value.startswith('your-'):
+                  sys.exit(f'Configure {key} in .github/power-platform-project.json')
+          values = {**defaults, **{k: v for k, v in data.items() if v is not None}}
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              for key, value in values.items():
+                  text = str(value).replace('\r', '').replace('\n', ' ')
+                  print(f'{key}={text}', file=out)
+          PY
+
+  deploy:
+    needs: project_settings
+    uses: KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/deploy-solution.yml@main
+    with:
+      project_key: ${{ needs.project_settings.outputs.project_key }}
+      source_ref: ${{ inputs.source_ref }}
+      solution_name: ${{ needs.project_settings.outputs.solution_name }}
+      solution_source_folder: ${{ format('{0}/src', inputs.solution_folder || needs.project_settings.outputs.solution_folder) }}
+      solution_package_type: ${{ inputs.solution_package_type }}
+      build_environment: ${{ inputs.build_environment || needs.project_settings.outputs.default_build_environment }}
+      target_environment: ${{ inputs.target_environment }}
+      auto_bind_connection_references: false
+      require_connection_bindings: false
+      provision_dataverse_connections: false
+      automation_role: ${{ needs.project_settings.outputs.automation_role }}
+      force_overwrite: true
+      publish_changes: true
+      activate_plugins: false
+      asynchronous_import: true
+      max_async_wait_minutes: 60
+      upload_solution_artifact: true
+      artifact_retention_days: 14
+      commit_solution_zip: ${{ inputs.commit_solution_zip }}
+      solution_zip_repository_folder: ${{ format('{0}/package/release', inputs.solution_folder || needs.project_settings.outputs.solution_folder) }}
+    secrets:
+      pp_tenant_id: ${{ secrets.PP_TENANT_ID }}
+      pp_app_id: ${{ secrets.PP_APP_ID }}
+      pp_client_secret: ${{ secrets.PP_CLIENT_SECRET }}

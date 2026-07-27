@@ -1,0 +1,23 @@
+{
+  "project_key": "your-project-key",
+  "solution_name": "YourSolutionName",
+  "default_solution_folder": "power-platform-solution",
+  "default_developer_alias": "maker",
+  "default_developer_upn": "maker@example.com",
+  "base_branch": "main",
+  "target_region": "europe",
+  "target_currency": "GBP",
+  "target_language": "English",
+  "checker_geo": "UnitedKingdom",
+  "developer_environment_suffix": "DEV",
+  "checker_rule_set": "Solution Checker",
+  "default_build_environment": "",
+  "target_environment_templates": "",
+  "target_security_group_id": "",
+  "validation_environment_templates": "",
+  "validation_security_group_id": "",
+  "automation_role": "System Administrator",
+  "developer_role": "System Administrator",
+  "reusable_workflow_repository": "KayodeAjayi-Veldarr/power-platform-workflows",
+  "reusable_workflow_ref": "main"
+}

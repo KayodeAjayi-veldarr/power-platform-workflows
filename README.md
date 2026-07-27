@@ -1,9 +1,9 @@
 # Power Platform GitHub Workflows
 
-Reusable GitHub Actions workflows for moving Power Platform solutions through a simple ALM flow:
+Reusable and starter GitHub Actions workflows for moving Power Platform solutions through a simple ALM flow:
 
 ```text
-make a short-lived change branch from main
+create a short-lived change branch from main
 manage a Power Platform development environment
 export and commit solution changes
 validate a pull request in a clean test environment
@@ -15,15 +15,14 @@ The workflows are designed for low-code teams who want GitHub version control wi
 
 ## What You Get
 
-This repo contains reusable workflows for:
+A repository created from this template already contains runnable project workflows:
 
-- `manage-power-platform-development-environment.yml` - **1. Manage Power Platform Development Environment**: create, reuse, or delete a development environment and sync a solution baseline.
-- `commit-feature-changes.yml` - **2. Commit Solution Changes**: export an unmanaged solution from a developer environment and commit the unpacked source from a short-lived change branch.
-- `validate-pull-request.yml` - **3. Validate Power Platform Pull Request**: pack the solution and validate it in a temporary Power Platform environment.
-- `deploy-solution.yml` - **4. Build and Deploy Solution**: build a managed release through a clean build environment and deploy it to a target environment.
-- `bootstrap-project-workflows.yml` - generate the small caller workflows that live in each project repository.
+- `project-1-manage-power-platform-development-environment.yml` - **1. Manage Power Platform Development Environment**: create, reuse, or delete a development environment and sync a solution baseline.
+- `project-2-commit-solution-changes.yml` - **2. Commit Solution Changes**: export an unmanaged solution from a developer environment and commit the unpacked source from a short-lived change branch.
+- `project-3-validate-power-platform-pull-request.yml` - **3. Validate Power Platform Pull Request**: pack the solution and validate it in a temporary Power Platform environment.
+- `project-4-build-and-deploy-solution.yml` - **4. Build and Deploy Solution**: build a managed release through a clean build environment and deploy it to a target environment.
 
-Generated project repositories also get `configure-project-workflows.yml`, which lets you set up the project from GitHub Actions instead of running PowerShell locally.
+Those project workflows call the reusable workflows in this repository. No setup workflow needs to create or update `.github/workflows` files, so the template avoids GitHub's workflow-file permission restriction.
 
 ## Requirements
 
@@ -43,35 +42,40 @@ For the full repository checklist, see `REPOSITORY-SETTINGS.txt`.
 
 ## Quick Setup
 
-### Option 1: Start From The Template
+### Start From The Template
 
-Create a new repository from this template repository.
+1. Create a new repository from this template repository.
+2. Edit `.github/power-platform-project.json` in the new repository.
+3. Replace the starter values with your project details:
+   - `project_key`, for example `chess-demo`
+   - `solution_name`, for example `ChessPlayingAgent`
+   - `default_solution_folder`, for example `power-platform-solution`
+   - `default_developer_alias`
+   - `default_developer_upn`
+   - `base_branch`, usually `main`
+   - optional build, validation, and target environment defaults
+4. Confirm the project repository can access `PP_TENANT_ID`, `PP_APP_ID`, and `PP_CLIENT_SECRET`.
+5. Use the numbered workflows from the Actions tab.
 
-In the new project repository, open **Actions** and run **0. Configure Project Workflows**. Enter:
+No project-level Actions variables are required. No extra GitHub secret is required beyond the three Power Platform secrets.
 
-- project key, for example `chess-demo`
-- solution unique name, for example `ChessPlayingAgent`
-- default solution folder, for example `power-platform-solution`
-- developer alias
-- developer UPN
-- base branch, usually `main`
-- optional build environment
+### Add To An Existing Repo
 
-The workflow commits the generated project workflows back to the repository using `GITHUB_TOKEN`. No extra secret is required.
-
-### Option 2: Add To An Existing Repo
-
-Copy this file into the existing project repository:
+Copy these files into the existing project repository:
 
 ```text
-project-workflows-template/.github/workflows/configure-project-workflows.yml
+.github/power-platform-project.json
+.github/workflows/project-1-manage-power-platform-development-environment.yml
+.github/workflows/project-2-commit-solution-changes.yml
+.github/workflows/project-3-validate-power-platform-pull-request.yml
+.github/workflows/project-4-build-and-deploy-solution.yml
 ```
 
-Commit it, then run **0. Configure Project Workflows** from the Actions tab.
+Then edit `.github/power-platform-project.json` and commit the files.
 
-### Option 3: Local Setup
+### Local Generated Setup
 
-Populate `project-workflows-template/PROJECT-DETAILS.txt`, then run:
+If you prefer generated per-project workflow files, populate `project-workflows-template/PROJECT-DETAILS.txt`, then run:
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\project-workflows-template\Install-ProjectWorkflows.ps1 -Force
@@ -92,7 +96,7 @@ Hotfixes use the same flow: create a short-lived `hotfix/<issue>` branch from `m
 
 ## Important Defaults
 
-The generated workflows use conservative import behaviour:
+The project workflows use conservative import behaviour:
 
 - they do not create or guess connector connections
 - they do not automatically bind connection references
@@ -112,7 +116,7 @@ Use this prompt with Codex or ChatGPT when setting up a new project repository:
 ```text
 I want to set up this repository to use KayodeAjayi-veldarr/power-platform-workflows for Power Platform ALM.
 
-Please inspect the repository first, then help me configure the generated GitHub Actions workflows without adding project-level Actions variables or extra secrets.
+Please inspect the repository first, then help me configure the project workflow files without adding project-level Actions variables or extra secrets.
 
 Project details:
 - Project key: <short-project-key>
@@ -123,11 +127,9 @@ Project details:
 - Default developer UPN: <email>
 - Build environment, if known: <environment-name-or-url>
 
-Use the GitHub bootstrap workflow if it is present. If it is not present, add the smallest configure-project-workflows.yml caller workflow, then run or explain the setup steps.
+Update .github/power-platform-project.json with these values. Keep PP_TENANT_ID, PP_APP_ID, and PP_CLIENT_SECRET as the only required Power Platform secrets. Do not create Azure DevOps secrets. Preserve unrelated files and existing workflow conventions.
 
-Keep PP_TENANT_ID, PP_APP_ID, and PP_CLIENT_SECRET as the only required Power Platform secrets. Do not create Azure DevOps secrets. Preserve unrelated files and existing workflow conventions.
-
-After setup, verify the generated workflows parse as YAML and explain the normal maker workflow in plain English.
+After setup, verify the workflow YAML parses and explain the normal maker workflow in plain English.
 ```
 
 ## Troubleshooting

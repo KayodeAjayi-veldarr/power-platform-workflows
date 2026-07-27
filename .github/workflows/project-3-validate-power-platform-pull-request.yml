@@ -1,0 +1,219 @@
+name: 3. Validate Power Platform Pull Request
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Branch or commit to validate. Leave blank to use the selected workflow branch.
+        required: false
+        default: ""
+        type: string
+      solution_folder:
+        description: Repository folder containing the solution to validate. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      validation_environment_type:
+        description: Temporary environment type
+        required: true
+        default: Sandbox
+        type: choice
+        options:
+          - Sandbox
+          - Trial
+      validation_environment_region:
+        description: Region for the temporary environment. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      validation_environment_currency:
+        description: Currency code for the temporary environment. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      validation_environment_language:
+        description: Language for the temporary environment. Leave blank to use project config.
+        required: false
+        default: ""
+        type: string
+      retain_validation_environment_on_failure:
+        description: Keep the temporary environment when validation fails
+        required: true
+        default: false
+        type: boolean
+      run_solution_checker:
+        description: Run Power Apps Solution Checker
+        required: true
+        default: true
+        type: boolean
+      checker_fail_on_errors:
+        description: Fail when Solution Checker returns error-level findings
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  project_settings:
+    name: Read project settings
+    runs-on: ubuntu-latest
+    outputs:
+      project_key: ${{ steps.settings.outputs.project_key }}
+      solution_name: ${{ steps.settings.outputs.solution_name }}
+      solution_folder: ${{ steps.settings.outputs.default_solution_folder }}
+      base_branch: ${{ steps.settings.outputs.base_branch }}
+      target_region: ${{ steps.settings.outputs.target_region }}
+      target_currency: ${{ steps.settings.outputs.target_currency }}
+      target_language: ${{ steps.settings.outputs.target_language }}
+      checker_geo: ${{ steps.settings.outputs.checker_geo }}
+      checker_rule_set: ${{ steps.settings.outputs.checker_rule_set }}
+      default_build_environment: ${{ steps.settings.outputs.default_build_environment }}
+      validation_environment_templates: ${{ steps.settings.outputs.validation_environment_templates }}
+      validation_security_group_id: ${{ steps.settings.outputs.validation_security_group_id }}
+      automation_role: ${{ steps.settings.outputs.automation_role }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Read project config
+        id: settings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          config_path = Path('.github/power-platform-project.json')
+          if not config_path.exists():
+              sys.exit('Missing .github/power-platform-project.json')
+          data = json.loads(config_path.read_text(encoding='utf-8'))
+          defaults = {
+              'default_solution_folder': 'power-platform-solution',
+              'base_branch': 'main',
+              'target_region': 'europe',
+              'target_currency': 'GBP',
+              'target_language': 'English',
+              'checker_geo': 'UnitedKingdom',
+              'checker_rule_set': 'Solution Checker',
+              'default_build_environment': '',
+              'validation_environment_templates': '',
+              'validation_security_group_id': '',
+              'automation_role': 'System Administrator'
+          }
+          required = ['project_key', 'solution_name']
+          for key in required:
+              value = str(data.get(key, '')).strip()
+              if not value or value.startswith('your-'):
+                  sys.exit(f'Configure {key} in .github/power-platform-project.json')
+          values = {**defaults, **{k: v for k, v in data.items() if v is not None}}
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              for key, value in values.items():
+                  text = str(value).replace('\r', '').replace('\n', ' ')
+                  print(f'{key}={text}', file=out)
+          PY
+
+  resolve_solution_folder:
+    name: Resolve solution folder
+    needs: project_settings
+    runs-on: ubuntu-latest
+    outputs:
+      solution_folder: ${{ steps.resolve.outputs.solution_folder }}
+    steps:
+      - name: Check out validation source
+        uses: actions/checkout@v4
+        with:
+          ref: >-
+            ${{ github.event.pull_request.head.sha ||
+            inputs.source_ref ||
+            github.ref_name }}
+          fetch-depth: 0
+      - name: Resolve solution folder
+        id: resolve
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_FOLDER: ${{ inputs.solution_folder }}
+          DEFAULT_FOLDER: ${{ needs.project_settings.outputs.solution_folder }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $selectedFolder = $env:DEFAULT_FOLDER
+          if ($env:EVENT_NAME -eq "workflow_dispatch") {
+            $requestedFolder = [string]$env:REQUESTED_FOLDER
+            if (-not [string]::IsNullOrWhiteSpace($requestedFolder)) {
+              $selectedFolder = $requestedFolder
+            }
+          }
+          $selectedFolder = ([string]$selectedFolder).Replace('\', '/')
+          if ($selectedFolder.StartsWith('/') -or $selectedFolder -match '^[A-Za-z]:') {
+            throw "solution_folder must be relative to the repository root."
+          }
+          $selectedFolder = $selectedFolder.Trim('/')
+          $segments = @($selectedFolder.Split('/') | Where-Object { $_ -ne '' })
+          if ([string]::IsNullOrWhiteSpace($selectedFolder) -or $segments -contains '..') {
+            throw "solution_folder is empty or contains an unsafe path segment."
+          }
+          $solutionSourceFolder = "$selectedFolder/src"
+          if (-not (Test-Path -LiteralPath $solutionSourceFolder -PathType Container)) {
+            throw "The selected solution source folder was not found: $solutionSourceFolder"
+          }
+          "solution_folder=$selectedFolder" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+  validate:
+    needs:
+      - project_settings
+      - resolve_solution_folder
+    uses: KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/validate-pull-request.yml@main
+    with:
+      project_key: ${{ needs.project_settings.outputs.project_key }}
+      source_ref: >-
+        ${{ github.event.pull_request.head.sha ||
+        inputs.source_ref ||
+        github.ref_name }}
+      pull_request_number: >-
+        ${{ github.event.pull_request.number || 0 }}
+      solution_name: ${{ needs.project_settings.outputs.solution_name }}
+      solution_source_folder: ${{ format('{0}/src', needs.resolve_solution_folder.outputs.solution_folder) }}
+      solution_package_type: Unmanaged
+      run_solution_checker: >-
+        ${{ github.event_name != 'workflow_dispatch' ||
+        inputs.run_solution_checker }}
+      checker_geo: ${{ needs.project_settings.outputs.checker_geo }}
+      checker_rule_set: ${{ needs.project_settings.outputs.checker_rule_set }}
+      checker_fail_on_errors: >-
+        ${{ github.event_name == 'workflow_dispatch' &&
+        inputs.checker_fail_on_errors || false }}
+      create_temporary_validation_environment: true
+      delete_validation_environment_after_validation: true
+      retain_validation_environment_on_failure: >-
+        ${{ github.event_name == 'workflow_dispatch' &&
+        inputs.retain_validation_environment_on_failure || false }}
+      validation_environment_name_prefix: ${{ needs.project_settings.outputs.project_key }}
+      validation_environment_type: >-
+        ${{ github.event_name == 'workflow_dispatch' &&
+        inputs.validation_environment_type || 'Sandbox' }}
+      validation_environment_region: ${{ inputs.validation_environment_region || needs.project_settings.outputs.target_region }}
+      validation_environment_currency: ${{ inputs.validation_environment_currency || needs.project_settings.outputs.target_currency }}
+      validation_environment_language: ${{ inputs.validation_environment_language || needs.project_settings.outputs.target_language }}
+      validation_environment_templates: ${{ needs.project_settings.outputs.validation_environment_templates }}
+      validation_environment_security_group_id: ${{ needs.project_settings.outputs.validation_security_group_id }}
+      environment_create_async: false
+      environment_stabilization_seconds: 180
+      force_overwrite: true
+      publish_changes: true
+      asynchronous_import: false
+      max_async_wait_minutes: 60
+      environment_lookup_attempts: 20
+      environment_lookup_delay_seconds: 30
+      upload_validation_artifacts: true
+      artifact_retention_days: 14
+    secrets:
+      pp_tenant_id: ${{ secrets.PP_TENANT_ID }}
+      pp_app_id: ${{ secrets.PP_APP_ID }}
+      pp_client_secret: ${{ secrets.PP_CLIENT_SECRET }}
