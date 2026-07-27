@@ -17,5 +17,7 @@
   "validation_environment_templates": "",
   "validation_security_group_id": "",
   "automation_role": "System Administrator",
-  "developer_role": "System Administrator"
+  "developer_role": "System Administrator",
+  "azure_devops_organisation": "",
+  "azure_devops_project": ""
 }

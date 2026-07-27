@@ -1,0 +1,79 @@
+name: 5. Generate Release Notes
+
+run-name: >-
+  Generate release notes for ${{ inputs.to_ref }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_name:
+        description: Optional release name shown at the top of the notes.
+        required: false
+        default: ""
+        type: string
+      from_ref:
+        description: Previous release tag, commit, or branch. Blank uses the latest reachable tag, then the first commit.
+        required: false
+        default: ""
+        type: string
+      to_ref:
+        description: Branch, tag, or commit to report up to. Usually main.
+        required: true
+        default: main
+        type: string
+      azure_work_items_json:
+        description: Optional verified Azure Boards details JSON from an AI agent. Leave blank to link IDs without verified status.
+        required: false
+        default: ""
+        type: string
+      commit_release_notes:
+        description: Commit the generated markdown file to the repository.
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  project_settings:
+    name: Read project settings
+    runs-on: ubuntu-latest
+    outputs:
+      azure_devops_organisation: ${{ steps.settings.outputs.azure_devops_organisation }}
+      azure_devops_project: ${{ steps.settings.outputs.azure_devops_project }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Read project config
+        id: settings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          config_path = Path('.github/power-platform-project.json')
+          data = json.loads(config_path.read_text(encoding='utf-8')) if config_path.exists() else {}
+          values = {
+              'azure_devops_organisation': data.get('azure_devops_organisation', ''),
+              'azure_devops_project': data.get('azure_devops_project', '')
+          }
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              for key, value in values.items():
+                  print(f"{key}={str(value).replace(chr(10), ' ').replace(chr(13), ' ')}", file=out)
+          PY
+
+  release_notes:
+    needs: project_settings
+    uses: ./.github/workflows/generate-release-notes.yml
+    with:
+      release_name: ${{ inputs.release_name }}
+      from_ref: ${{ inputs.from_ref }}
+      to_ref: ${{ inputs.to_ref }}
+      azure_devops_organisation: ${{ needs.project_settings.outputs.azure_devops_organisation }}
+      azure_devops_project: ${{ needs.project_settings.outputs.azure_devops_project }}
+      azure_work_items_json: ${{ inputs.azure_work_items_json }}
+      commit_release_notes: ${{ inputs.commit_release_notes }}
+      release_notes_folder: release-notes
+      artifact_retention_days: 30

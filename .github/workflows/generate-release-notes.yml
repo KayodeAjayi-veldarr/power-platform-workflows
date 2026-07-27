@@ -1,0 +1,402 @@
+name: Internal - Reusable Generate Release Notes
+
+on:
+  workflow_call:
+    inputs:
+      release_name:
+        description: Human-friendly release name shown in the generated notes
+        required: false
+        default: ""
+        type: string
+      from_ref:
+        description: Previous release tag, commit, or branch. Blank uses the latest reachable Git tag, then the first commit.
+        required: false
+        default: ""
+        type: string
+      to_ref:
+        description: Release branch, tag, or commit to report up to
+        required: false
+        default: main
+        type: string
+      azure_devops_organisation:
+        description: Azure DevOps organisation name used to build work item links
+        required: false
+        default: ""
+        type: string
+      azure_devops_project:
+        description: Azure DevOps project name used to build work item links
+        required: false
+        default: ""
+        type: string
+      azure_work_items_json:
+        description: Optional verified Azure Boards details from an agent, as JSON array or object keyed by ID
+        required: false
+        default: ""
+        type: string
+      commit_release_notes:
+        description: Commit the generated release notes markdown file to the repository
+        required: false
+        default: false
+        type: boolean
+      release_notes_folder:
+        description: Folder used when committing release notes
+        required: false
+        default: release-notes
+        type: string
+      artifact_retention_days:
+        description: Number of days to retain the release notes artifact
+        required: false
+        default: 30
+        type: number
+    outputs:
+      release_notes_file:
+        value: ${{ jobs.release_notes.outputs.release_notes_file }}
+      release_range:
+        value: ${{ jobs.release_notes.outputs.release_range }}
+      work_item_count:
+        value: ${{ jobs.release_notes.outputs.work_item_count }}
+      unverified_work_item_count:
+        value: ${{ jobs.release_notes.outputs.unverified_work_item_count }}
+      flagged_work_item_count:
+        value: ${{ jobs.release_notes.outputs.flagged_work_item_count }}
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  release_notes:
+    name: Generate release notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      release_notes_file: ${{ steps.generate.outputs.release_notes_file }}
+      release_range: ${{ steps.generate.outputs.release_range }}
+      work_item_count: ${{ steps.generate.outputs.work_item_count }}
+      unverified_work_item_count: ${{ steps.generate.outputs.unverified_work_item_count }}
+      flagged_work_item_count: ${{ steps.generate.outputs.flagged_work_item_count }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.to_ref }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Generate release notes markdown
+        id: generate
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_NAME: ${{ inputs.release_name }}
+          FROM_REF: ${{ inputs.from_ref }}
+          TO_REF: ${{ inputs.to_ref }}
+          ADO_ORG: ${{ inputs.azure_devops_organisation }}
+          ADO_PROJECT: ${{ inputs.azure_devops_project }}
+          WORK_ITEMS_JSON: ${{ inputs.azure_work_items_json }}
+          NOTES_FOLDER: ${{ inputs.release_notes_folder }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Clean-Token([string]$Value) {
+            if ([string]::IsNullOrWhiteSpace($Value)) { return "" }
+            return $Value.Trim()
+          }
+
+          function Escape-Markdown([string]$Value) {
+            if ($null -eq $Value) { return "" }
+            return $Value.Replace('|', '\|').Replace("`r", ' ').Replace("`n", ' ').Trim()
+          }
+
+          function Get-ObjectValue($Object, [string[]]$Names) {
+            if ($null -eq $Object) { return "" }
+            foreach ($name in $Names) {
+              $current = $Object
+              $found = $true
+              foreach ($segment in ($name -split '\.')) {
+                if ($null -eq $current) {
+                  $found = $false
+                  break
+                }
+                $property = $current.PSObject.Properties[$segment]
+                if ($null -eq $property) {
+                  $found = $false
+                  break
+                }
+                $current = $property.Value
+              }
+              if ($found -and -not [string]::IsNullOrWhiteSpace([string]$current)) {
+                return [string]$current
+              }
+            }
+            return ""
+          }
+
+          function Get-WorkItemMap([string]$Json) {
+            $map = @{}
+            if ([string]::IsNullOrWhiteSpace($Json)) { return $map }
+            try {
+              $parsed = $Json | ConvertFrom-Json
+              if ($parsed -is [System.Array]) {
+                foreach ($item in @($parsed)) {
+                  if ($null -eq $item) { continue }
+                  $id = Get-ObjectValue $item @('id','Id','workItemId','WorkItemId')
+                  if (-not [string]::IsNullOrWhiteSpace($id)) { $map[$id.Trim()] = $item }
+                }
+              }
+              else {
+                foreach ($property in $parsed.PSObject.Properties) {
+                  $map[[string]$property.Name] = $property.Value
+                }
+              }
+            }
+            catch {
+              throw "azure_work_items_json must be valid JSON. Use an array like [{`"id`":485,`"title`":`"Instruction screen`",`"type`":`"User Story`",`"state`":`"Resolved`"}]."
+            }
+            return $map
+          }
+
+          git fetch --tags --force | Out-Host
+
+          $toRef = Clean-Token $env:TO_REF
+          if ([string]::IsNullOrWhiteSpace($toRef)) { $toRef = "main" }
+          $toSha = (git rev-parse $toRef).Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($toSha)) { throw "Could not resolve to_ref '$toRef'." }
+
+          $fromRef = Clean-Token $env:FROM_REF
+          $fromReason = "input"
+          if ([string]::IsNullOrWhiteSpace($fromRef)) {
+            $candidate = (git describe --tags --abbrev=0 $toSha 2>$null)
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($candidate)) {
+              $fromRef = $candidate.Trim()
+              $fromReason = "latest reachable tag"
+            }
+            else {
+              $fromRef = (git rev-list --max-parents=0 $toSha | Select-Object -First 1).Trim()
+              $fromReason = "first repository commit"
+            }
+          }
+
+          $fromSha = (git rev-parse $fromRef).Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fromSha)) { throw "Could not resolve from_ref '$fromRef'." }
+          $range = "$fromSha..$toSha"
+
+          $commitRows = @()
+          $rawCommits = @(git log --reverse --format='%H%x09%h%x09%ad%x09%an%x09%s' --date=short $range)
+          foreach ($row in $rawCommits) {
+            if ([string]::IsNullOrWhiteSpace($row)) { continue }
+            $parts = $row -split "`t", 5
+            if ($parts.Count -lt 5) { continue }
+            $body = (git log -1 --format='%B' $parts[0]) -join "`n"
+            $commitRows += [pscustomobject]@{
+              Sha = $parts[0]
+              ShortSha = $parts[1]
+              Date = $parts[2]
+              Author = $parts[3]
+              Subject = $parts[4]
+              Body = $body
+              Url = "https://github.com/$env:GITHUB_REPOSITORY/commit/$($parts[0])"
+            }
+          }
+
+          $prsByNumber = @{}
+          foreach ($commit in $commitRows) {
+            $apiPath = "/repos/$env:GITHUB_REPOSITORY/commits/$($commit.Sha)/pulls"
+            $json = gh api $apiPath -H "Accept: application/vnd.github+json" 2>$null
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) { continue }
+            foreach ($pr in @($json | ConvertFrom-Json)) {
+              if ($null -eq $pr -or -not $pr.merged_at) { continue }
+              $prsByNumber[[string]$pr.number] = [pscustomobject]@{
+                Number = $pr.number
+                Title = [string]$pr.title
+                Url = [string]$pr.html_url
+                MergedAt = [string]$pr.merged_at
+                Commit = $commit.ShortSha
+              }
+            }
+          }
+          $pullRequests = @($prsByNumber.Values | Sort-Object Number)
+
+          $workItemRefs = @{}
+          $sourceTexts = @()
+          foreach ($commit in $commitRows) { $sourceTexts += $commit.Subject; $sourceTexts += $commit.Body }
+          foreach ($pr in $pullRequests) { $sourceTexts += $pr.Title }
+          foreach ($text in $sourceTexts) {
+            foreach ($match in [regex]::Matches([string]$text, '(?i)\bAB#(?<id>\d+)\b')) {
+              $workItemRefs[$match.Groups['id'].Value] = $true
+            }
+          }
+
+          $workItemMap = Get-WorkItemMap $env:WORK_ITEMS_JSON
+          $workItems = @()
+          $unverified = 0
+          $flagged = 0
+          foreach ($id in @($workItemRefs.Keys | Sort-Object {[int]$_})) {
+            $item = $workItemMap[$id]
+            $title = Get-ObjectValue $item @('title','Title','fields.System.Title')
+            $type = Get-ObjectValue $item @('type','Type','fields.System.WorkItemType')
+            $state = Get-ObjectValue $item @('state','State','fields.System.State')
+            if ([string]::IsNullOrWhiteSpace($title)) { $title = "Not verified by workflow" }
+            if ([string]::IsNullOrWhiteSpace($type)) { $type = "Not verified" }
+            if ([string]::IsNullOrWhiteSpace($state)) { $state = "Not verified"; $unverified++ }
+            $isReady = $state -match '^(?i)(resolved|closed|done)$'
+            if (-not $isReady) { $flagged++ }
+
+            $link = ""
+            if (-not [string]::IsNullOrWhiteSpace($env:ADO_ORG) -and -not [string]::IsNullOrWhiteSpace($env:ADO_PROJECT)) {
+              $encodedProject = [uri]::EscapeDataString($env:ADO_PROJECT)
+              $link = "https://dev.azure.com/$env:ADO_ORG/$encodedProject/_workitems/edit/$id"
+            }
+            else {
+              $link = "AB#$id"
+            }
+
+            $related = @()
+            foreach ($commit in $commitRows) {
+              if (("$($commit.Subject)`n$($commit.Body)") -match "(?i)\bAB#$id\b") {
+                $related += "[$($commit.ShortSha)]($($commit.Url))"
+              }
+            }
+            foreach ($pr in $pullRequests) {
+              if ($pr.Title -match "(?i)\bAB#$id\b") {
+                $related += "[PR #$($pr.Number)]($($pr.Url))"
+              }
+            }
+            $relatedText = if ($related.Count -gt 0) { ($related | Select-Object -Unique) -join ', ' } else { "Not found" }
+
+            $workItems += [pscustomobject]@{
+              Id = $id
+              Title = $title
+              Type = $type
+              State = $state
+              Link = $link
+              Related = $relatedText
+              Ready = $isReady
+            }
+          }
+
+          $releaseName = Clean-Token $env:RELEASE_NAME
+          if ([string]::IsNullOrWhiteSpace($releaseName)) { $releaseName = "Release notes for $toRef" }
+          $dateStamp = (Get-Date -Format 'yyyy-MM-dd')
+          $safeName = ($releaseName.ToLowerInvariant() -replace '[^a-z0-9]+','-').Trim('-')
+          if ([string]::IsNullOrWhiteSpace($safeName)) { $safeName = "release-notes" }
+          $outputRoot = Join-Path $env:RUNNER_TEMP "release-notes"
+          New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
+          $notesFile = Join-Path $outputRoot "$dateStamp-$safeName.md"
+
+          $featureRows = @()
+          $fixRows = @()
+          $technicalRows = @()
+          foreach ($commit in $commitRows) {
+            $line = "- [$($commit.ShortSha)]($($commit.Url)) $($commit.Subject)"
+            if ($commit.Subject -match '^(?i)(fix|hotfix|bug)[:( ]') { $fixRows += $line }
+            elseif ($commit.Subject -match '^(?i)(feat|feature)[:( ]') { $featureRows += $line }
+            else { $technicalRows += $line }
+          }
+          if ($featureRows.Count -eq 0) { $featureRows = @("- No feature commits identified by commit prefix.") }
+          if ($fixRows.Count -eq 0) { $fixRows = @("- No fix commits identified by commit prefix.") }
+          if ($technicalRows.Count -eq 0) { $technicalRows = @("- No technical commits identified.") }
+
+          $lines = @()
+          $lines += "# $releaseName"
+          $lines += ""
+          $lines += "Generated: $dateStamp"
+          $lines += ""
+          $lines += "Range: ``$fromRef`` ($fromReason) to ``$toRef``"
+          $lines += ""
+          $lines += "## Summary"
+          $lines += ""
+          $lines += "- Commits: $($commitRows.Count)"
+          $lines += "- Pull requests: $($pullRequests.Count)"
+          $lines += "- Azure Boards work items: $($workItems.Count)"
+          $lines += "- Work items needing attention: $flagged"
+          $lines += ""
+          $lines += "## Features"
+          $lines += ""
+          $lines += $featureRows
+          $lines += ""
+          $lines += "## Fixes"
+          $lines += ""
+          $lines += $fixRows
+          $lines += ""
+          $lines += "## Technical changes"
+          $lines += ""
+          $lines += $technicalRows
+          $lines += ""
+          $lines += "## Pull requests"
+          $lines += ""
+          if ($pullRequests.Count -eq 0) { $lines += "- No merged pull requests were resolved from the commits in this range." }
+          else {
+            foreach ($pr in $pullRequests) { $lines += "- [PR #$($pr.Number)]($($pr.Url)) $($pr.Title)" }
+          }
+          $lines += ""
+          $lines += "## Azure Boards work items"
+          $lines += ""
+          if ($workItems.Count -eq 0) {
+            $lines += "No `AB#` work item references were found in the commits or pull request titles for this range."
+          }
+          else {
+            $lines += "| ID | Title | Type | State | Link | Related PR or commit |"
+            $lines += "| --- | --- | --- | --- | --- | --- |"
+            foreach ($item in $workItems) {
+              $state = if ($item.Ready) { $item.State } else { "**$($item.State)**" }
+              $link = if ($item.Link -like 'http*') { "[$($item.Id)]($($item.Link))" } else { $item.Link }
+              $lines += "| $($item.Id) | $(Escape-Markdown $item.Title) | $(Escape-Markdown $item.Type) | $(Escape-Markdown $state) | $link | $(Escape-Markdown $item.Related) |"
+            }
+          }
+          $lines += ""
+          $lines += "## Known limitations"
+          $lines += ""
+          if ($flagged -eq 0) { $lines += "- No linked work items were flagged." }
+          else { $lines += "- $flagged linked work item(s) are not verified as Resolved, Closed, or Done. Review them before release." }
+          if ($unverified -gt 0) { $lines += "- $unverified work item status value(s) were not provided to the workflow. Verify them in Azure DevOps or rerun with azure_work_items_json populated." }
+          $lines += ""
+          $lines += "## Deployment notes"
+          $lines += ""
+          $lines += "- Validate the solution package before production deployment."
+          $lines += "- Confirm Power Platform connection references and cloud flows after import."
+          $lines += "- Keep this release tied to the deployment workflow run and target environment."
+
+          $lines | Set-Content -LiteralPath $notesFile -Encoding utf8
+
+          $repoNotesFolder = Join-Path $env:GITHUB_WORKSPACE $env:NOTES_FOLDER
+          New-Item -ItemType Directory -Path $repoNotesFolder -Force | Out-Null
+          $repoNotesFile = Join-Path $repoNotesFolder (Split-Path $notesFile -Leaf)
+          Copy-Item -LiteralPath $notesFile -Destination $repoNotesFile -Force
+
+          $relativePath = [System.IO.Path]::GetRelativePath($env:GITHUB_WORKSPACE, $repoNotesFile).Replace('\','/')
+          "release_notes_file=$relativePath" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "release_range=$fromSha..$toSha" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "work_item_count=$($workItems.Count)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "unverified_work_item_count=$unverified" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "flagged_work_item_count=$flagged" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          Get-Content -LiteralPath $notesFile | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+      - name: Upload release notes artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes-${{ github.run_number }}-${{ github.run_attempt }}
+          path: ${{ steps.generate.outputs.release_notes_file }}
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Commit release notes
+        if: inputs.commit_release_notes
+        shell: pwsh
+        env:
+          RELEASE_NOTES_FILE: ${{ steps.generate.outputs.release_notes_file }}
+          TARGET_REF: ${{ inputs.to_ref }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$env:RELEASE_NOTES_FILE"
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { exit 0 }
+          git commit -m "docs: add release notes [skip ci]"
+          if ($LASTEXITCODE -ne 0) { throw "The release notes commit failed." }
+          git push origin "HEAD:$env:TARGET_REF"
+          if ($LASTEXITCODE -ne 0) { throw "The release notes could not be pushed." }

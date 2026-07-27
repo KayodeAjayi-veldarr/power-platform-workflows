@@ -11,6 +11,7 @@ Create a repository from this template, update one project config file, add the 
 - Solution export and commit workflow
 - Pull request validation in a clean test environment
 - Managed build and deployment workflow
+- Release notes generated from merged commits, pull requests, and `AB#` work item references
 - Optional Azure Boards linking with `AB#` work item references
 
 A repository created from this template does not need access to the original template repository. The numbered project workflows call reusable workflows stored in the same repository.
@@ -57,6 +58,7 @@ Keep the other fields when you need default region, currency, validation, build,
 6. Run **3. Validate Power Platform Pull Request** to test the solution in a temporary validation environment.
 7. Merge the approved pull request into `main`.
 8. Run **4. Build and Deploy Solution** to create and import the managed release.
+9. Run **5. Generate Release Notes** when you want a release summary for stakeholders or deployment records.
 
 Hotfixes use the same flow. The only difference is the branch name and urgency.
 
@@ -70,6 +72,7 @@ Run the numbered workflows. The `Internal - Reusable ...` workflows are implemen
 | **2. Commit Solution Changes** | After making changes in the Power Platform maker portal. | Exported solution source committed to the branch, optional PR, and solution artifact. |
 | **3. Validate Power Platform Pull Request** | Automatically on PRs to `main`, or manually before review. | Temporary validation import, optional Solution Checker results, and artifacts. |
 | **4. Build and Deploy Solution** | After PR approval/merge when releasing to test, UAT, or production. | Managed ZIP built from source, stored artifact, optional committed ZIP, and target import. |
+| **5. Generate Release Notes** | When preparing or documenting a release. | Markdown release notes from commits, PRs, and Azure Boards references. |
 
 ## Workflow 1: Manage Power Platform Development Environment
 
@@ -176,6 +179,50 @@ Outputs to look for:
 - Target import result
 - Deployment summary with source ref, package type, and target environment
 
+
+## Workflow 5: Generate Release Notes
+
+Use this when preparing a release summary after changes have been merged, or when an AI agent needs a repeatable way to document what is included in a release.
+
+| Input | What to enter |
+| --- | --- |
+| `release_name` | Optional title for the release notes, for example `Chess Copilot July release`. |
+| `from_ref` | Previous release tag, commit, or branch. Leave blank to use the latest reachable Git tag. If no tag exists, the workflow uses the first commit. |
+| `to_ref` | Branch, tag, or commit to report up to. Usually `main`. |
+| `azure_work_items_json` | Optional verified Azure Boards details from an AI agent. Leave blank if you only want `AB#` links and unverified statuses. |
+| `commit_release_notes` | `true` to commit the generated markdown file under `release-notes`. `false` keeps it as a workflow artifact only. |
+
+Optional project config fields:
+
+```json
+{
+  "azure_devops_organisation": "VeldarrProjects",
+  "azure_devops_project": "Chess Playing Agent"
+}
+```
+
+The workflow does not require an Azure DevOps secret. It extracts `AB#123` references from commit messages and pull request titles. To include verified work item title, type, and state, give the workflow `azure_work_items_json` populated by an AI agent or another trusted source that can read Azure DevOps.
+
+Example `azure_work_items_json`:
+
+```json
+[
+  {
+    "id": 485,
+    "title": "Instruction screen",
+    "type": "User Story",
+    "state": "Resolved"
+  }
+]
+```
+
+Outputs to look for:
+
+- Release notes markdown in the workflow summary
+- Release notes artifact
+- Optional committed file under `release-notes`
+- Work items flagged when their state is not `Resolved`, `Closed`, or `Done`
+
 ## Publishing Behaviour
 
 The workflows now publish solution customisations at the points where export or unmanaged import depends on published state:
@@ -246,8 +293,9 @@ Only the numbered workflows are user-facing:
 2. Commit Solution Changes
 3. Validate Power Platform Pull Request
 4. Build and Deploy Solution
+5. Generate Release Notes
 
-Explain which workflow to run next, which inputs to fill in, which values can be left blank because they come from project config, and what output should confirm success. Do not ask for new secrets unless the existing PP_TENANT_ID, PP_APP_ID, and PP_CLIENT_SECRET are genuinely missing or inaccessible.
+Explain which workflow to run next, which inputs to fill in, which values can be left blank because they come from project config, and what output should confirm success. Do not ask for new secrets unless the existing PP_TENANT_ID, PP_APP_ID, and PP_CLIENT_SECRET are genuinely missing or inaccessible. For release notes, use Workflow 5. If Azure DevOps work item status is needed, read it with an available Azure DevOps tool and pass it into azure_work_items_json; do not invent statuses.
 ```
 
 ## Troubleshooting
@@ -259,3 +307,4 @@ Explain which workflow to run next, which inputs to fill in, which values can be
 - If export misses recent Canvas app changes, save and publish the Canvas app in Power Apps, then rerun **2. Commit Solution Changes**.
 - If import/export fails, confirm the Entra app exists as an application user in the relevant environments and has the required Dataverse role.
 - If Azure Boards links do not appear, confirm the Azure Boards GitHub app is connected to the repository and the commit or PR contains `AB#<id>`.
+- If release notes show `Not verified` for work item state, rerun **5. Generate Release Notes** with `azure_work_items_json` populated from Azure DevOps.
