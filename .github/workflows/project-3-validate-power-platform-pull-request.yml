@@ -11,17 +11,17 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: Branch or commit to validate. Leave blank to use the selected workflow branch.
+        description: Branch or commit to validate when run manually. Blank uses the selected workflow branch.
         required: false
         default: ""
         type: string
       solution_folder:
-        description: Repository folder containing the solution to validate. Leave blank to use project config.
+        description: Repo folder containing solution src. Blank uses project config.
         required: false
         default: ""
         type: string
       validation_environment_type:
-        description: Temporary environment type
+        description: Temporary environment type for validation. Sandbox is the normal choice.
         required: true
         default: Sandbox
         type: choice
@@ -29,32 +29,32 @@ on:
           - Sandbox
           - Trial
       validation_environment_region:
-        description: Region for the temporary environment. Leave blank to use project config.
+        description: Region for the temporary validation environment. Blank uses project config.
         required: false
         default: ""
         type: string
       validation_environment_currency:
-        description: Currency code for the temporary environment. Leave blank to use project config.
+        description: Currency for the temporary validation environment. Blank uses project config.
         required: false
         default: ""
         type: string
       validation_environment_language:
-        description: Language for the temporary environment. Leave blank to use project config.
+        description: Language for the temporary validation environment. Blank uses project config.
         required: false
         default: ""
         type: string
       retain_validation_environment_on_failure:
-        description: Keep the temporary environment when validation fails
+        description: Keep the temporary environment after a failed validation so a maker can inspect it.
         required: true
         default: false
         type: boolean
       run_solution_checker:
-        description: Run Power Apps Solution Checker
+        description: Run Power Apps Solution Checker after import.
         required: true
         default: true
         type: boolean
       checker_fail_on_errors:
-        description: Fail when Solution Checker returns error-level findings
+        description: Fail the workflow if Solution Checker reports error-level findings.
         required: true
         default: false
         type: boolean

@@ -7,40 +7,40 @@ on:
   workflow_dispatch:
     inputs:
       developer_alias:
-        description: Short developer identifier
+        description: Short maker label for commit/PR text, for example kayode.
         required: true
         type: string
       developer_environment:
-        description: Developer environment name, URL or ID
+        description: Environment where the maker changed the solution. Use name, URL or ID from workflow 1.
         required: true
         type: string
       solution_folder:
-        description: Repository folder to update. Leave blank to use project config.
+        description: Repo folder to update with unpacked solution source. Blank uses project config.
         required: false
         default: ""
         type: string
       commit_message:
-        description: Git commit message. Leave blank to generate from project config.
+        description: Optional commit message. Include AB#123 if linking Azure Boards manually. Blank generates one.
         required: false
         default: ""
         type: string
       azure_work_item_ids:
-        description: Azure Boards work item IDs, for example 123 or 123,456
+        description: Optional Azure Boards IDs, for example 123 or 123,456. The workflow writes AB# links.
         required: false
         default: ""
         type: string
       create_pull_request:
-        description: Create a pull request after pushing the solution changes
+        description: Create or update a pull request back to the configured base branch after committing.
         required: true
         default: true
         type: boolean
       pull_request_title:
-        description: Leave blank to generate the title
+        description: Optional PR title. Blank generates one from the solution and branch.
         required: false
         default: ""
         type: string
       pull_request_draft:
-        description: Create the pull request as a draft
+        description: Draft is safest while still reviewing exported changes. Turn off when ready for review.
         required: true
         default: true
         type: boolean

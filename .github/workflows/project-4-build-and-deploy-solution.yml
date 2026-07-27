@@ -8,26 +8,26 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: Branch, tag or commit to deploy
+        description: Approved branch, tag or commit to release. Usually main after the PR is merged.
         required: true
         default: main
         type: string
       solution_folder:
-        description: Repository folder containing the solution source. Leave blank to use project config.
+        description: Repo folder containing solution src. Blank uses project config.
         required: false
         default: ""
         type: string
       build_environment:
-        description: Clean build environment name, URL or ID. Leave blank to use project config.
+        description: Clean build environment used to create the managed ZIP. Blank uses project config.
         required: false
         default: ""
         type: string
       target_environment:
-        description: Target environment name, URL or ID
+        description: Environment that receives the release package. Use name, URL or ID.
         required: true
         type: string
       solution_package_type:
-        description: Managed is recommended outside development
+        description: Managed is recommended for test/UAT/production. Use Unmanaged only for special cases.
         required: true
         default: Managed
         type: choice
@@ -35,7 +35,7 @@ on:
           - Managed
           - Unmanaged
       commit_solution_zip:
-        description: Commit the exact release ZIP to this repository
+        description: Store the exact generated release ZIP in the repo for traceability.
         required: true
         default: true
         type: boolean

@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       workspace_action:
-        description: Prepare or remove a Power Platform development environment
+        description: PrepareOrReuse creates/reuses a maker dev environment; DeleteEnvironment removes one.
         required: true
         default: PrepareOrReuse
         type: choice
@@ -16,42 +16,42 @@ on:
           - PrepareOrReuse
           - DeleteEnvironment
       developer_alias:
-        description: Short developer identifier. Leave blank to use project config.
+        description: Short maker label used in names, for example kayode. Blank uses project config.
         required: false
         default: ""
         type: string
       developer_upn:
-        description: Developer Microsoft 365 email address. Leave blank to use project config.
+        description: Maker Microsoft 365 email address that owns the Developer environment. Blank uses config.
         required: false
         default: ""
         type: string
       source_environment:
-        description: Source environment name, URL, ID or unique name
+        description: Optional source environment to copy the solution baseline from. Use name, URL, ID or unique name.
         required: false
         default: ""
         type: string
       source_solution_name:
-        description: Solution unique name in the source environment. Leave blank to use project config.
+        description: Solution unique name to export from the source environment. Blank uses project config.
         required: false
         default: ""
         type: string
       solution_folder:
-        description: Repository folder to use for this solution run. Leave blank to use project config.
+        description: Repo folder for solution source/package files. Blank uses project config.
         required: false
         default: ""
         type: string
       workspace_environment:
-        description: PrepareOrReuse generates when blank. DeleteEnvironment requires environment name, URL or ID.
+        description: Existing dev environment to reuse/delete. Blank lets PrepareOrReuse generate the standard name.
         required: false
         default: ""
         type: string
       workspace_environment_domain:
-        description: Dataverse domain used only when creating a new environment
+        description: Optional Dataverse URL prefix for a new environment, 2-32 chars. Blank auto-generates.
         required: false
         default: ""
         type: string
       workspace_environment_type:
-        description: Environment type used only when creating a new environment
+        description: Type for a newly created environment. Developer is best for individual maker work.
         required: true
         default: Developer
         type: choice
@@ -60,22 +60,22 @@ on:
           - Sandbox
           - Trial
       workspace_environment_region:
-        description: Region used only when creating a new environment. Leave blank to use project config.
+        description: Region for a new environment, for example europe. Blank uses project config.
         required: false
         default: ""
         type: string
       workspace_environment_currency:
-        description: Currency code used only when creating a new environment. Leave blank to use project config.
+        description: Currency for a new environment, for example GBP. Blank uses project config.
         required: false
         default: ""
         type: string
       workspace_environment_language:
-        description: Language used only when creating a new environment. Leave blank to use project config.
+        description: Language for a new environment, for example English. Blank uses project config.
         required: false
         default: ""
         type: string
       workspace_environment_mode:
-        description: Reuse an existing environment or require a new one
+        description: ReuseOrCreate is normal. CreateOnly fails if the generated environment already exists.
         required: true
         default: ReuseOrCreate
         type: choice
@@ -83,17 +83,17 @@ on:
           - ReuseOrCreate
           - CreateOnly
       deletion_confirmation:
-        description: Required only for deletion. Enter DELETE:resolved-environment-name
+        description: Safety check for deletion. Enter DELETE:exact-environment-name shown by the workflow.
         required: false
         default: ""
         type: string
       commit_baseline_to_branch:
-        description: Commit the source-environment baseline to this branch
+        description: Commit the exported source baseline to the current branch after prepare/reuse.
         required: true
         default: true
         type: boolean
       baseline_commit_message:
-        description: Baseline commit message. Leave blank to generate from project config.
+        description: Optional baseline commit message. Blank generates a clear default.
         required: false
         default: ""
         type: string
