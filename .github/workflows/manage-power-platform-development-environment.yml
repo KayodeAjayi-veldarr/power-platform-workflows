@@ -792,7 +792,11 @@ jobs:
           function Convert-ToSafeDomain([string]$Value) {
             $result = $Value.ToLowerInvariant() -replace '[^a-z0-9-]', '-'
             $result = $result -replace '-+', '-'
-            return $result.Trim('-')
+            $result = $result.Trim('-')
+            if ([string]::IsNullOrWhiteSpace($result)) { $result = "pp" }
+            if ($result.Length -gt 32) { $result = $result.Substring(0, 32).Trim('-') }
+            if ($result.Length -lt 2) { $result = ($result + "pp").Substring(0, 2) }
+            return $result
           }
 
           if ([string]::IsNullOrWhiteSpace($env:REQUESTED_NAME)) {
