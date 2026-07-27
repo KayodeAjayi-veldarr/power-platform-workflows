@@ -102,7 +102,7 @@ jobs:
 
   deploy:
     needs: project_settings
-    uses: KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/deploy-solution.yml@main
+    uses: ./.github/workflows/deploy-solution.yml
     with:
       project_key: ${{ needs.project_settings.outputs.project_key }}
       source_ref: ${{ inputs.source_ref }}

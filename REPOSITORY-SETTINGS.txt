@@ -19,16 +19,14 @@ Open the project repository and go to:
 
 GitHub Actions must be enabled.
 
-The repository policy must allow these actions and reusable workflows:
+The repository policy must allow these actions and local reusable workflows:
 
     actions/checkout@v4
     actions/upload-artifact@v4
     microsoft/powerplatform-actions/actions-install@v1
-    KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/*@main
+    local reusable workflows from .github/workflows
 
-When the organisation uses a selected-actions policy, allow GitHub-owned
-actions, the Microsoft Power Platform action above, and reusable workflows from
-KayodeAjayi-Veldarr/power-platform-workflows.
+When the organisation uses a selected-actions policy, allow GitHub-owned actions, the Microsoft Power Platform action above, and reusable workflows from the same repository.
 
 Under Workflow permissions, select:
 
@@ -43,25 +41,7 @@ Deploy Solution from Git can commit the exact generated solution ZIP back to
 the selected solution folder in the project repository.
 
 ----------------------------------------------------------------------
-2. SHARED WORKFLOW REPOSITORY: ACCESS
-----------------------------------------------------------------------
-
-Open:
-
-    KayodeAjayi-Veldarr/power-platform-workflows
-    → Settings
-    → Actions
-    → General
-
-Under Access, select:
-
-    Accessible from repositories in the KayodeAjayi-Veldarr organisation
-
-This allows private project repositories in the organisation to call the four
-reusable workflows.
-
-----------------------------------------------------------------------
-3. ORGANISATION SECRETS
+2. ORGANISATION SECRETS
 ----------------------------------------------------------------------
 
 Open the GitHub organisation and go to:
@@ -84,7 +64,7 @@ exist and the project has access.
 The workflows do not require project-level Actions variables.
 
 ----------------------------------------------------------------------
-4. OPTIONAL SOURCE CREDENTIALS
+3. OPTIONAL SOURCE CREDENTIALS
 ----------------------------------------------------------------------
 
 Only configure these secrets when the source environment uses a different
@@ -100,7 +80,7 @@ secret mappings in:
     .github/workflows/manage-power-platform-development-environment.yml
 
 ----------------------------------------------------------------------
-5. DEFAULT BRANCH
+4. DEFAULT BRANCH
 ----------------------------------------------------------------------
 
 The repository default branch must match the Base branch value in:
@@ -114,7 +94,7 @@ The supplied configuration uses:
 Commit the four generated caller workflows to that branch.
 
 ----------------------------------------------------------------------
-6. REQUIRED ACCESS OUTSIDE GITHUB
+5. REQUIRED ACCESS OUTSIDE GITHUB
 ----------------------------------------------------------------------
 
 The Microsoft Entra application represented by the three PP secrets must:
@@ -130,14 +110,13 @@ The current workflow configuration uses System Administrator for the automation
 and developer application-user role assignments.
 
 ----------------------------------------------------------------------
-7. FINAL CHECK
+6. FINAL CHECK
 ----------------------------------------------------------------------
 
     [ ] GitHub Actions is enabled in the project repository
     [ ] Required actions and reusable workflows are allowed
     [ ] Workflow permissions are set to Read and write permissions
     [ ] GitHub Actions can create pull requests
-    [ ] The shared workflow repository is accessible to the organisation
     [ ] The project repository can access PP_TENANT_ID
     [ ] The project repository can access PP_APP_ID
     [ ] The project repository can access PP_CLIENT_SECRET
@@ -154,7 +133,7 @@ For repositories that use Azure Boards work items:
 - No Azure DevOps PAT or additional GitHub secret is required for AB# linking.
 
 ----------------------------------------------------------------------
-8. BUILD AND TARGET ENVIRONMENTS
+7. BUILD AND TARGET ENVIRONMENTS
 ----------------------------------------------------------------------
 
 For managed releases, provide a dedicated build environment. The automation

@@ -169,7 +169,7 @@ jobs:
     needs:
       - project_settings
       - resolve_solution_folder
-    uses: KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/validate-pull-request.yml@main
+    uses: ./.github/workflows/validate-pull-request.yml
     with:
       project_key: ${{ needs.project_settings.outputs.project_key }}
       source_ref: >-

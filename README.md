@@ -22,7 +22,7 @@ A repository created from this template already contains runnable project workfl
 - `project-3-validate-power-platform-pull-request.yml` - **3. Validate Power Platform Pull Request**: pack the solution and validate it in a temporary Power Platform environment.
 - `project-4-build-and-deploy-solution.yml` - **4. Build and Deploy Solution**: build a managed release through a clean build environment and deploy it to a target environment.
 
-Those project workflows call the reusable workflows in this repository. No setup workflow needs to create or update `.github/workflows` files, so the template avoids GitHub's workflow-file permission restriction.
+Those project workflows call the reusable workflows copied into the same repository. No project repository needs access to the original template repository after it has been created, and no setup workflow needs to create or update `.github/workflows` files.
 
 ## Requirements
 
@@ -114,7 +114,7 @@ Azure Boards linking works through commit messages containing `AB#<work-item-id>
 Use this prompt with Codex or ChatGPT when setting up a new project repository:
 
 ```text
-I want to set up this repository to use KayodeAjayi-veldarr/power-platform-workflows for Power Platform ALM.
+I want to set up this repository to use the Power Platform workflow template files already present in this repo.
 
 Please inspect the repository first, then help me configure the project workflow files without adding project-level Actions variables or extra secrets.
 

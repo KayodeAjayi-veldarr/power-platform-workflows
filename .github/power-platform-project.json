@@ -17,7 +17,5 @@
   "validation_environment_templates": "",
   "validation_security_group_id": "",
   "automation_role": "System Administrator",
-  "developer_role": "System Administrator",
-  "reusable_workflow_repository": "KayodeAjayi-Veldarr/power-platform-workflows",
-  "reusable_workflow_ref": "main"
+  "developer_role": "System Administrator"
 }

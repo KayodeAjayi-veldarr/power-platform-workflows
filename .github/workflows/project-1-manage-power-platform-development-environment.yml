@@ -160,7 +160,7 @@ jobs:
 
   manage:
     needs: project_settings
-    uses: KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/manage-power-platform-development-environment.yml@main
+    uses: ./.github/workflows/manage-power-platform-development-environment.yml
     with:
       workspace_action: ${{ inputs.workspace_action }}
       project_key: ${{ needs.project_settings.outputs.project_key }}

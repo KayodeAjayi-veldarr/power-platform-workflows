@@ -107,7 +107,7 @@ jobs:
           PY
   commit:
     needs: project_settings
-    uses: KayodeAjayi-Veldarr/power-platform-workflows/.github/workflows/commit-feature-changes.yml@main
+    uses: ./.github/workflows/commit-feature-changes.yml
     with:
       project_key: ${{ needs.project_settings.outputs.project_key }}
       branch_ref: ${{ github.ref_name }}
