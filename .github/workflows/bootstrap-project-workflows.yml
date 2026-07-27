@@ -1,6 +1,90 @@
 name: 0. Reusable - Bootstrap Power Platform Project Workflows
 
 on:
+  workflow_dispatch:
+    inputs:
+      project_key:
+        description: Short project identifier
+        required: true
+        type: string
+      solution_name:
+        description: Power Platform solution unique name
+        required: true
+        type: string
+      default_solution_folder:
+        description: Repository folder used for the unpacked solution
+        required: false
+        default: power-platform-solution
+        type: string
+      default_developer_alias:
+        description: Short developer identifier shown in manual workflow forms
+        required: true
+        type: string
+      default_developer_upn:
+        description: Developer Microsoft 365 user principal name
+        required: true
+        type: string
+      base_branch:
+        description: Repository base branch
+        required: false
+        default: main
+        type: string
+      target_region:
+        description: Default Power Platform region for generated environments
+        required: false
+        default: europe
+        type: string
+      target_currency:
+        description: Default currency code for generated environments
+        required: false
+        default: GBP
+        type: string
+      target_language:
+        description: Default language for generated environments
+        required: false
+        default: English
+        type: string
+      checker_geo:
+        description: Power Platform checker geography
+        required: false
+        default: UnitedKingdom
+        type: string
+      developer_environment_suffix:
+        description: Suffix used for generated developer environments
+        required: false
+        default: DEV
+        type: string
+      checker_rule_set:
+        description: Power Platform checker ruleset name
+        required: false
+        default: Solution Checker
+        type: string
+      default_build_environment:
+        description: Optional clean build environment name, URL or ID
+        required: false
+        default: ""
+        type: string
+      reusable_workflow_repository:
+        description: Repository containing the shared reusable workflows
+        required: false
+        default: KayodeAjayi-Veldarr/power-platform-workflows
+        type: string
+      reusable_workflow_ref:
+        description: Branch, tag or SHA for the shared reusable workflows
+        required: false
+        default: main
+        type: string
+      replace_existing_workflows:
+        description: Replace existing generated caller workflows
+        required: false
+        default: true
+        type: boolean
+      commit_message:
+        description: Commit message for the generated workflows
+        required: false
+        default: Configure Power Platform project workflows
+        type: string
+
   workflow_call:
     inputs:
       project_key:
