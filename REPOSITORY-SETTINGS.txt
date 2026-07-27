@@ -1,153 +1,75 @@
 POWER PLATFORM PROJECT REPOSITORY SETTINGS
 ==========================================
 
-Apply these settings to each project repository that uses the shared Power
-Platform workflows.
+Use this checklist after creating a repository from the template.
 
-No GitHub Actions variables are required.
-Do not place secret values in this file or commit them to the repository.
+1. GitHub Actions
+-----------------
 
-----------------------------------------------------------------------
-1. PROJECT REPOSITORY: ACTIONS PERMISSIONS
-----------------------------------------------------------------------
+Open:
 
-Open the project repository and go to:
+    Settings > Actions > General
 
-    Settings
-    → Actions
-    → General
+Set:
 
-GitHub Actions must be enabled.
+    Actions permissions: enabled for this repository
+    Workflow permissions: Read and write permissions
+    Allow GitHub Actions to create and approve pull requests: enabled
 
-The repository policy must allow these actions and local reusable workflows:
+If your organisation restricts Actions, allow:
 
     actions/checkout@v4
     actions/upload-artifact@v4
     microsoft/powerplatform-actions/actions-install@v1
-    local reusable workflows from .github/workflows
+    local reusable workflows in .github/workflows
 
-When the organisation uses a selected-actions policy, allow GitHub-owned actions, the Microsoft Power Platform action above, and reusable workflows from the same repository.
+2. Secrets
+----------
 
-Under Workflow permissions, select:
-
-    Read and write permissions
-
-Enable:
-
-    Allow GitHub Actions to create and approve pull requests
-
-This is required because Commit Solution Changes can create a pull request and
-Deploy Solution from Git can commit the exact generated solution ZIP back to
-the selected solution folder in the project repository.
-
-----------------------------------------------------------------------
-2. ORGANISATION SECRETS
-----------------------------------------------------------------------
-
-Open the GitHub organisation and go to:
-
-    Settings
-    → Secrets and variables
-    → Actions
-    → Secrets
-
-The following organisation secrets must already exist:
+Grant the repository access to these Actions secrets:
 
     PP_TENANT_ID
     PP_APP_ID
     PP_CLIENT_SECRET
 
-For each secret, confirm that Repository access includes the project repository.
-Do not create duplicate repository secrets when the organisation secrets already
-exist and the project has access.
+Do not add project-level Actions variables for the standard setup.
+Do not add Azure DevOps secrets for Azure Boards linking.
 
-The workflows do not require project-level Actions variables.
+3. Power Platform Access
+------------------------
 
-----------------------------------------------------------------------
-3. OPTIONAL SOURCE CREDENTIALS
-----------------------------------------------------------------------
+The Entra app behind the `PP_*` secrets needs:
 
-Only configure these secrets when the source environment uses a different
-Microsoft Entra application:
+    Access to each required Power Platform environment
+    Application user setup where Dataverse access is required
+    Dataverse security role for solution import/export
+    Admin permission if workflows will create or delete environments
 
-    SOURCE_PP_TENANT_ID
-    SOURCE_PP_APP_ID
-    SOURCE_PP_CLIENT_SECRET
+4. Project Config
+-----------------
 
-After granting the project repository access to them, uncomment the matching
-secret mappings in:
+Update:
 
-    .github/workflows/manage-power-platform-development-environment.yml
+    .github/power-platform-project.json
 
-----------------------------------------------------------------------
-4. DEFAULT BRANCH
-----------------------------------------------------------------------
+Set the project key, solution name, solution folder, base branch, and default maker details.
 
-The repository default branch must match the Base branch value in:
+5. Optional Azure Boards Linking
+--------------------------------
 
-    PROJECT-DETAILS.txt
+Install/connect the Azure Boards GitHub app for the repository.
+Then use `AB#<work-item-id>` references in commit messages or pull request text.
+No Azure DevOps PAT is needed.
 
-The supplied configuration uses:
+6. Final Check
+--------------
 
-    main
-
-Commit the four generated caller workflows to that branch.
-
-----------------------------------------------------------------------
-5. REQUIRED ACCESS OUTSIDE GITHUB
-----------------------------------------------------------------------
-
-The Microsoft Entra application represented by the three PP secrets must:
-
-    Have a valid, unexpired client secret
-    Be able to access the required Power Platform environments
-    Exist as an application user where Dataverse access is required
-    Have the Dataverse security role needed for import and export operations
-    Have the approved tenant-level permissions needed to create or delete
-    developer and validation environments
-
-The current workflow configuration uses System Administrator for the automation
-and developer application-user role assignments.
-
-----------------------------------------------------------------------
-6. FINAL CHECK
-----------------------------------------------------------------------
-
-    [ ] GitHub Actions is enabled in the project repository
-    [ ] Required actions and reusable workflows are allowed
-    [ ] Workflow permissions are set to Read and write permissions
-    [ ] GitHub Actions can create pull requests
-    [ ] The project repository can access PP_TENANT_ID
-    [ ] The project repository can access PP_APP_ID
-    [ ] The project repository can access PP_CLIENT_SECRET
-    [ ] No project-level Actions variables have been created
-    [ ] The default branch matches PROJECT-DETAILS.txt
-    [ ] The Microsoft Entra application can access the required environments
-
-
-AZURE BOARDS
-
-For repositories that use Azure Boards work items:
-- Connect the project repository to the correct Azure Boards project using the Azure Boards GitHub app.
-- See AZURE-BOARDS-INTEGRATION.txt.
-- No Azure DevOps PAT or additional GitHub secret is required for AB# linking.
-
-----------------------------------------------------------------------
-7. BUILD AND TARGET ENVIRONMENTS
-----------------------------------------------------------------------
-
-For managed releases, provide a dedicated build environment. The automation
-application user must be able to import the unmanaged build input and export the
-managed release from that environment.
-
-The standard project workflows import solutions without creating or selecting
-connector connections. This keeps dynamically created environments predictable
-and avoids binding a solution to the wrong identity. The import is allowed to
-complete with unresolved connection references and affected cloud flows may stay
-off. After import, create or select the required connections in the environment,
-update the connection references, and turn on the flows. OAuth credentials are
-not transported in solution ZIP files.
-
-Advanced automatic binding remains available in the reusable workflows but is
-disabled in the generated project workflows. Enable it only when the connection
-identity and mapping rules have been deliberately defined for that environment.
+    [ ] Actions enabled
+    [ ] Workflow permissions set to read/write
+    [ ] Actions can create pull requests
+    [ ] Repository can access PP_TENANT_ID
+    [ ] Repository can access PP_APP_ID
+    [ ] Repository can access PP_CLIENT_SECRET
+    [ ] .github/power-platform-project.json updated
+    [ ] Entra app can access the required Power Platform environments
+    [ ] Azure Boards GitHub app connected, if work item linking is needed

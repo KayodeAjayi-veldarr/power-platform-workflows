@@ -1,4 +1,4 @@
-name: 4. Reusable - Build and Deploy Solution
+name: Internal - Reusable Build and Deploy Solution
 
 on:
   workflow_call:

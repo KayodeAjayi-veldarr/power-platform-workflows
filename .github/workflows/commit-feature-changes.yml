@@ -1,4 +1,4 @@
-name: 2. Reusable - Commit Solution Changes
+name: Internal - Reusable Commit Solution Changes
 
 on:
   workflow_call:
