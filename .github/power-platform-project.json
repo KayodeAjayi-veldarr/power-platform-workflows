@@ -12,6 +12,7 @@
   "developer_environment_suffix": "DEV",
   "checker_rule_set": "Solution Checker",
   "default_build_environment": "",
+  "default_target_environment": "",
   "target_environment_templates": "",
   "target_security_group_id": "",
   "validation_environment_templates": "",

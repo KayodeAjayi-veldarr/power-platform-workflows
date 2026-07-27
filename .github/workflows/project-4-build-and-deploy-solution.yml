@@ -2,7 +2,7 @@ name: 4. Build and Deploy Solution
 
 run-name: >-
   Build and deploy Power Platform solution from ${{ inputs.source_ref }}
-  to ${{ inputs.target_environment }}
+  to ${{ inputs.target_environment || 'configured target environment' }}
 
 on:
   workflow_dispatch:
@@ -23,17 +23,18 @@ on:
         default: ""
         type: string
       target_environment:
-        description: Environment that receives the release package. Use name, URL or ID.
-        required: true
+        description: Environment that receives the release package. Blank uses project config.
+        required: false
+        default: ""
         type: string
       solution_package_type:
-        description: Managed is recommended for test/UAT/production. Use Unmanaged only for special cases.
+        description: Unmanaged is the default for this starter. Choose Managed when releasing to managed downstream environments.
         required: false
-        default: Managed
+        default: Unmanaged
         type: choice
         options:
-          - Managed
           - Unmanaged
+          - Managed
       commit_solution_zip:
         description: Store the exact generated release ZIP in the repo for traceability.
         required: false
@@ -58,6 +59,7 @@ jobs:
       checker_geo: ${{ steps.settings.outputs.checker_geo }}
       checker_rule_set: ${{ steps.settings.outputs.checker_rule_set }}
       default_build_environment: ${{ steps.settings.outputs.default_build_environment }}
+      default_target_environment: ${{ steps.settings.outputs.default_target_environment }}
       validation_environment_templates: ${{ steps.settings.outputs.validation_environment_templates }}
       validation_security_group_id: ${{ steps.settings.outputs.validation_security_group_id }}
       automation_role: ${{ steps.settings.outputs.automation_role }}
@@ -84,6 +86,7 @@ jobs:
               'checker_geo': 'UnitedKingdom',
               'checker_rule_set': 'Solution Checker',
               'default_build_environment': '',
+              'default_target_environment': '',
               'validation_environment_templates': '',
               'validation_security_group_id': '',
               'automation_role': 'System Administrator'
@@ -110,7 +113,7 @@ jobs:
       solution_source_folder: ${{ format('{0}/src', inputs.solution_folder || needs.project_settings.outputs.solution_folder) }}
       solution_package_type: ${{ inputs.solution_package_type }}
       build_environment: ${{ inputs.build_environment || needs.project_settings.outputs.default_build_environment }}
-      target_environment: ${{ inputs.target_environment }}
+      target_environment: ${{ inputs.target_environment || needs.project_settings.outputs.default_target_environment }}
       auto_bind_connection_references: false
       require_connection_bindings: false
       provision_dataverse_connections: false

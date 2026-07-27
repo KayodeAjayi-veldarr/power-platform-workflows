@@ -43,7 +43,8 @@ Update `.github/power-platform-project.json` with your project values:
   "default_solution_folder": "power-platform-solution",
   "default_developer_alias": "kayode",
   "default_developer_upn": "maker@contoso.com",
-  "base_branch": "main"
+  "base_branch": "main",
+  "default_target_environment": "74cbfae4-ae16-e4c4-aa43-8de0084eb0a7"
 }
 ```
 
@@ -58,7 +59,7 @@ Keep the other fields when you need default region, currency, validation, build,
 5. Open or review the pull request.
 6. Run **3. Validate Power Platform Pull Request** to test the solution in a temporary validation environment.
 7. Merge the approved pull request into `main`.
-8. Run **4. Build and Deploy Solution** to create and import the managed release.
+8. Run **4. Build and Deploy Solution** to create and import the release. This starter defaults to unmanaged unless you choose managed.
 9. Run **5. Generate Release Notes** when you want a release summary for stakeholders or deployment records.
 
 Hotfixes use the same flow. The only difference is the branch name and urgency.
@@ -72,7 +73,7 @@ Run the numbered workflows. The `Internal - Reusable ...` workflows are implemen
 | **1. Manage Power Platform Development Environment** | At the start of a change, or when cleaning up a feature environment. | A maker-ready environment, optional baseline commit, and links in the run summary. |
 | **2. Commit Solution Changes** | After making changes in the Power Platform maker portal. | Exported solution source committed to the branch, optional PR, and solution artifact. |
 | **3. Validate Power Platform Pull Request** | Automatically on PRs to `main`, or manually before review. | Temporary validation import, optional Solution Checker results, and artifacts. |
-| **4. Build and Deploy Solution** | After PR approval/merge when releasing to test, UAT, or production. | Managed ZIP built from source, stored artifact, optional committed ZIP, and target import. |
+| **4. Build and Deploy Solution** | After PR approval/merge when releasing to test, UAT, or production. | Release ZIP built from source, stored artifact, optional committed ZIP, and target import. |
 | **5. Generate Release Notes** | When preparing or documenting a release. | Markdown release notes from commits, PRs, and Azure Boards references. |
 
 ## Workflow 1: Manage Power Platform Development Environment
@@ -168,8 +169,8 @@ Use this after a change is approved and merged, usually from `main`.
 | `source_ref` | Approved branch, tag, or commit to release. Usually `main`. |
 | `solution_folder` | Optional repo folder. Blank uses project config. |
 | `build_environment` | Clean build environment name, URL, or ID. Blank uses project config. |
-| `target_environment` | Environment name, URL, or ID that receives the release. |
-| `solution_package_type` | `Managed` for test/UAT/production. `Unmanaged` only for special cases. |
+| `target_environment` | Environment name, URL, or ID that receives the release. Blank uses `default_target_environment` from project config. |
+| `solution_package_type` | Defaults to `Unmanaged`. Choose `Managed` when releasing to managed downstream environments. |
 | `commit_solution_zip` | `true` to store the exact generated release ZIP in the repo. |
 
 Outputs to look for:
