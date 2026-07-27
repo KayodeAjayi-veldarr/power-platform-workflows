@@ -116,6 +116,7 @@ Use this after the maker has changed the app, flow, table, agent, or other solut
 | `developer_environment` | Environment name, URL, or ID where the changes were made. |
 | `solution_folder` | Optional repo folder. Blank uses project config. |
 | `commit_message` | Optional Git message. Blank generates one. Include `AB#123` if linking manually. |
+| `publish_before_export` | Keep `true` for isolated dev environments. It runs `pac solution publish` before export. Set `false` only for shared dev environments where publishing everyone's draft customisations would be unsafe. |
 | `azure_work_item_ids` | Optional Azure Boards IDs, for example `123` or `123,456`. |
 | `create_pull_request` | `true` to create or update a PR back to the base branch. |
 | `pull_request_title` | Optional PR title. Blank generates one. |
@@ -123,6 +124,7 @@ Use this after the maker has changed the app, flow, table, agent, or other solut
 
 Outputs to look for:
 
+- Dataverse solution customisations published before export when `publish_before_export` is `true`
 - Exported unmanaged solution ZIP artifact
 - Updated unpacked solution source under the configured solution folder
 - Git commit pushed to the current branch
@@ -168,10 +170,22 @@ Use this after a change is approved and merged, usually from `main`.
 
 Outputs to look for:
 
+- For managed releases, the unmanaged build import is published before the managed ZIP is exported
 - Managed or unmanaged release ZIP artifact
 - Optional committed release ZIP under the solution package folder
 - Target import result
 - Deployment summary with source ref, package type, and target environment
+
+## Publishing Behaviour
+
+The workflows now publish solution customisations at the points where export or unmanaged import depends on published state:
+
+- **Workflow 2** can run `pac solution publish` before exporting from the developer environment. This is enabled by default through `publish_before_export`.
+- **Workflow 3** imports into the temporary validation environment with publish enabled.
+- **Workflow 4** publishes the unmanaged build import before exporting the managed release package.
+- **Workflow 4** publishes unmanaged target imports when `publish_changes` is enabled. Managed target imports do not need an extra publish flag.
+
+Canvas apps have one extra maker responsibility: saving and publishing a Canvas app version in Power Apps is separate from publishing Dataverse solution customisations. Before running **2. Commit Solution Changes**, the maker should save and publish the Canvas app in the maker portal if the latest app version must be exported.
 
 ## Azure Boards
 
@@ -242,5 +256,6 @@ Explain which workflow to run next, which inputs to fill in, which values can be
 - If a workflow cannot find a solution folder, confirm `.github/power-platform-project.json` points to the folder that contains `src`.
 - If Power Platform authentication fails, check the three `PP_*` secrets and the Entra app registration.
 - If environment creation fails on `--domain`, use a short lowercase domain such as `chessappdemo` or leave the field blank so the workflow generates one.
+- If export misses recent Canvas app changes, save and publish the Canvas app in Power Apps, then rerun **2. Commit Solution Changes**.
 - If import/export fails, confirm the Entra app exists as an application user in the relevant environments and has the required Dataverse role.
 - If Azure Boards links do not appear, confirm the Azure Boards GitHub app is connected to the repository and the commit or PR contains `AB#<id>`.

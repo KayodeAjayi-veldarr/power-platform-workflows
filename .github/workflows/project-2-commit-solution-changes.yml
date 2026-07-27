@@ -24,6 +24,11 @@ on:
         required: false
         default: ""
         type: string
+      publish_before_export:
+        description: Publish Dataverse customisations before export. Keep true unless using a shared dev environment.
+        required: true
+        default: true
+        type: boolean
       azure_work_item_ids:
         description: Optional Azure Boards IDs, for example 123 or 123,456. The workflow writes AB# links.
         required: false
@@ -119,6 +124,7 @@ jobs:
       solution_source_folder: ${{ format('{0}/src', inputs.solution_folder || needs.project_settings.outputs.solution_folder) }}
       export_managed: false
       export_async: true
+      publish_before_export: ${{ inputs.publish_before_export }}
       commit_changes: true
       push_changes: true
       commit_message: ${{ inputs.commit_message || format('Sync {0} solution changes', needs.project_settings.outputs.solution_name) }}

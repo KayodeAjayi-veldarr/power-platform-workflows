@@ -69,7 +69,7 @@ on:
         default: true
         type: boolean
       publish_changes:
-        description: Publish after a successful unmanaged import
+        description: Publish after unmanaged imports, including build imports before managed export
         required: false
         default: true
         type: boolean
@@ -540,12 +540,14 @@ jobs:
           ASYNC_IMPORT: ${{ inputs.asynchronous_import }}
           MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
           ARTIFACT_ROOT: ${{ steps.package_source.outputs.artifact_root }}
+          PUBLISH_CHANGES: ${{ inputs.publish_changes }}
           SETTINGS_FILE: ${{ steps.build_connection_settings.outputs.settings_file }}
         run: |
           $ErrorActionPreference = "Stop"
           $hash = (Get-FileHash -LiteralPath $env:SOLUTION_ZIP -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($hash -ne $env:EXPECTED_HASH) { throw "The build-input ZIP changed before import." }
           $arguments = @('solution','import','--path',$env:SOLUTION_ZIP,'--environment',$env:ENVIRONMENT_URL,'--force-overwrite')
+          if ($env:PUBLISH_CHANGES -eq 'true') { $arguments += '--publish-changes' }
           if ($env:ASYNC_IMPORT -eq 'true') {
             $arguments += '--async'
             $arguments += @('--max-async-wait-time',$env:MAX_WAIT)
@@ -880,8 +882,8 @@ jobs:
           ENVIRONMENT_URL: ${{ steps.environments.outputs.target_environment_url }}
           SETTINGS_FILE: ${{ steps.connection_settings.outputs.settings_file || steps.no_connection_settings.outputs.settings_file }}
           FORCE_OVERWRITE: ${{ inputs.force_overwrite }}
-          PUBLISH_CHANGES: ${{ inputs.publish_changes }}
           ACTIVATE_PLUGINS: ${{ inputs.activate_plugins }}
+          PUBLISH_CHANGES: ${{ inputs.publish_changes }}
           ASYNC_IMPORT: ${{ inputs.asynchronous_import }}
           MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
           ARTIFACT_ROOT: ${{ steps.package_source.outputs.artifact_root }}

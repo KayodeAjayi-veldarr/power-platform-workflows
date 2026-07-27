@@ -47,7 +47,11 @@ on:
         required: false
         default: ""
         type: string
-
+      publish_before_export:
+        description: Publish Dataverse solution customisations before exporting from the developer environment
+        required: false
+        default: true
+        type: boolean
       commit_changes:
         required: false
         default: true
@@ -308,6 +312,25 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Authentication to the developer environment failed."
           }
+
+      - name: Publish customisations before export
+        if: inputs.publish_before_export
+        shell: pwsh
+        env:
+          ENVIRONMENT_URL: ${{ steps.environment.outputs.environment_url }}
+          MAX_WAIT: ${{ inputs.max_async_wait_minutes }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $arguments = @(
+            "solution", "publish",
+            "--environment", $env:ENVIRONMENT_URL,
+            "--async",
+            "--max-async-wait-time", $env:MAX_WAIT
+          )
+          $output = & pac @arguments 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | Write-Host
+          if ($exitCode -ne 0) { throw "Publishing customisations before export failed." }
 
       - name: Export exact current feature solution
         id: export
