@@ -1,0 +1,99 @@
+name: 6. Update Azure DevOps Work Item
+
+run-name: >-
+  Update Azure DevOps work item ${{ inputs.work_item_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      work_item_id:
+        description: Azure Boards work item ID to update.
+        required: true
+        type: string
+      azure_devops_organisation:
+        description: Azure DevOps organisation. Blank uses project config.
+        required: false
+        default: ""
+        type: string
+      azure_devops_project:
+        description: Azure DevOps project. Blank uses project config.
+        required: false
+        default: ""
+        type: string
+      discussion:
+        description: Discussion/comment text to add. Blank is allowed when another update is requested.
+        required: false
+        default: ""
+        type: string
+      target_state:
+        description: Optional state to set. Must be valid for the work item type.
+        required: false
+        default: ""
+        type: string
+      assigned_to:
+        description: Optional user display name or email address to assign.
+        required: false
+        default: ""
+        type: string
+      tags:
+        description: Optional comma or semicolon separated tags to append.
+        required: false
+        default: ""
+        type: string
+      github_pr_url:
+        description: Optional GitHub pull request URL to include in the discussion.
+        required: false
+        default: ""
+        type: string
+      github_commit_url:
+        description: Optional GitHub commit URL to include in the discussion.
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  project_settings:
+    name: Read project settings
+    runs-on: ubuntu-latest
+    outputs:
+      azure_devops_organisation: ${{ steps.settings.outputs.azure_devops_organisation }}
+      azure_devops_project: ${{ steps.settings.outputs.azure_devops_project }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Read project config
+        id: settings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          config_path = Path('.github/power-platform-project.json')
+          data = json.loads(config_path.read_text(encoding='utf-8')) if config_path.exists() else {}
+          values = {
+              'azure_devops_organisation': data.get('azure_devops_organisation', ''),
+              'azure_devops_project': data.get('azure_devops_project', '')
+          }
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              for key, value in values.items():
+                  print(f"{key}={str(value).replace(chr(10), ' ').replace(chr(13), ' ')}", file=out)
+          PY
+
+  update_work_item:
+    needs: project_settings
+    uses: ./.github/workflows/update-azure-devops-work-item.yml
+    with:
+      work_item_id: ${{ inputs.work_item_id }}
+      azure_devops_organisation: ${{ inputs.azure_devops_organisation || needs.project_settings.outputs.azure_devops_organisation }}
+      azure_devops_project: ${{ inputs.azure_devops_project || needs.project_settings.outputs.azure_devops_project }}
+      discussion: ${{ inputs.discussion }}
+      target_state: ${{ inputs.target_state }}
+      assigned_to: ${{ inputs.assigned_to }}
+      tags: ${{ inputs.tags }}
+      github_pr_url: ${{ inputs.github_pr_url }}
+      github_commit_url: ${{ inputs.github_commit_url }}
+    secrets:
+      azure_devops_pat: ${{ secrets.AZURE_DEVOPS_PAT }}
