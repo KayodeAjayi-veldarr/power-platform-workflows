@@ -4,6 +4,9 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - ".github/power-platform-project.json"
+      - "power-platform-solution/**"
     types:
       - opened
       - synchronize
