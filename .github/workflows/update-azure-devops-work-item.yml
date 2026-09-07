@@ -148,8 +148,18 @@ jobs:
             }
             catch {
               $message = $_.Exception.Message
+              if (-not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) {
+                $message = "$message $($_.ErrorDetails.Message)"
+              }
               $response = $_.Exception.Response
-              if ($null -ne $response -and $null -ne $response.GetResponseStream()) {
+              if ($null -ne $response -and $response -is [System.Net.Http.HttpResponseMessage]) {
+                try {
+                  $details = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                  if (-not [string]::IsNullOrWhiteSpace($details)) { $message = "$message $details" }
+                }
+                catch {}
+              }
+              elseif ($null -ne $response -and $response.PSObject.Methods.Name -contains "GetResponseStream") {
                 try {
                   $reader = [System.IO.StreamReader]::new($response.GetResponseStream())
                   $details = $reader.ReadToEnd()
