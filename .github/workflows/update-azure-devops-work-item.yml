@@ -1,0 +1,312 @@
+name: Internal - Reusable Update Azure DevOps Work Item
+
+on:
+  workflow_call:
+    inputs:
+      work_item_id:
+        description: Azure Boards work item ID to update.
+        required: true
+        type: string
+      azure_devops_organisation:
+        description: Azure DevOps organisation. Blank uses project config.
+        required: false
+        default: ""
+        type: string
+      azure_devops_project:
+        description: Azure DevOps project. Blank uses project config.
+        required: false
+        default: ""
+        type: string
+      discussion:
+        description: Discussion/comment text to add. Blank is allowed when another update is requested.
+        required: false
+        default: ""
+        type: string
+      target_state:
+        description: Optional state to set. Must be valid for the work item type.
+        required: false
+        default: ""
+        type: string
+      assigned_to:
+        description: Optional user display name or email address to assign.
+        required: false
+        default: ""
+        type: string
+      tags:
+        description: Optional comma or semicolon separated tags to append.
+        required: false
+        default: ""
+        type: string
+      github_pr_url:
+        description: Optional GitHub pull request URL to include in the discussion.
+        required: false
+        default: ""
+        type: string
+      github_commit_url:
+        description: Optional GitHub commit URL to include in the discussion.
+        required: false
+        default: ""
+        type: string
+    outputs:
+      updated:
+        description: Whether the workflow sent a JSON Patch update.
+        value: ${{ jobs.update_work_item.outputs.updated }}
+      work_item_url:
+        description: Azure DevOps work item URL.
+        value: ${{ jobs.update_work_item.outputs.work_item_url }}
+      changes:
+        description: Comma separated list of applied change categories.
+        value: ${{ jobs.update_work_item.outputs.changes }}
+    secrets:
+      azure_devops_pat:
+        description: Azure DevOps PAT with permission to read and update work items.
+        required: true
+permissions:
+  contents: read
+
+jobs:
+  update_work_item:
+    name: Update Azure DevOps work item
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      updated: ${{ steps.update.outputs.updated }}
+      work_item_url: ${{ steps.update.outputs.work_item_url }}
+      changes: ${{ steps.update.outputs.changes }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Update work item
+        id: update
+        shell: pwsh
+        env:
+          ADO_PAT: ${{ secrets.azure_devops_pat }}
+          INPUT_WORK_ITEM_ID: ${{ inputs.work_item_id }}
+          INPUT_ADO_ORG: ${{ inputs.azure_devops_organisation }}
+          INPUT_ADO_PROJECT: ${{ inputs.azure_devops_project }}
+          INPUT_DISCUSSION: ${{ inputs.discussion }}
+          INPUT_TARGET_STATE: ${{ inputs.target_state }}
+          INPUT_ASSIGNED_TO: ${{ inputs.assigned_to }}
+          INPUT_TAGS: ${{ inputs.tags }}
+          INPUT_GITHUB_PR_URL: ${{ inputs.github_pr_url }}
+          INPUT_GITHUB_COMMIT_URL: ${{ inputs.github_commit_url }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Clean-Text([string]$Value) {
+            if ([string]::IsNullOrWhiteSpace($Value)) { return "" }
+            return $Value.Trim()
+          }
+
+          function Get-FieldValue($Object, [string]$FieldName) {
+            if ($null -eq $Object -or $null -eq $Object.fields) { return "" }
+            $property = $Object.fields.PSObject.Properties[$FieldName]
+            if ($null -eq $property -or $null -eq $property.Value) { return "" }
+            return [string]$property.Value
+          }
+
+          function Split-Tags([string]$Value) {
+            if ([string]::IsNullOrWhiteSpace($Value)) { return @() }
+            return @($Value -split '[,;]' | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+          }
+
+          function Get-AdoBaseUri([string]$Organisation, [string]$Project) {
+            $trimmedOrganisation = $Organisation.Trim().TrimEnd("/")
+            $encodedProject = [uri]::EscapeDataString($Project)
+            if ($trimmedOrganisation -match '^https://dev\.azure\.com/[^/]+$') {
+              return "$trimmedOrganisation/$encodedProject"
+            }
+            if ($trimmedOrganisation -match '^https://[^/]+\.visualstudio\.com$') {
+              return "$trimmedOrganisation/$encodedProject"
+            }
+            if ($trimmedOrganisation -match '^https?://') {
+              throw "azure_devops_organisation must be an organization name, a https://dev.azure.com/{organization} URL, or a https://{organization}.visualstudio.com URL."
+            }
+
+            $encodedOrganisation = [uri]::EscapeDataString($trimmedOrganisation)
+            return "https://dev.azure.com/$encodedOrganisation/$encodedProject"
+          }
+
+          function Invoke-AdoRest {
+            param(
+              [Parameter(Mandatory=$true)][string]$Method,
+              [Parameter(Mandatory=$true)][string]$Uri,
+              [object]$Body = $null,
+              [string]$ContentType = "application/json"
+            )
+            $headers = @{
+              Authorization = "Basic $script:BasicToken"
+              Accept = "application/json"
+            }
+            try {
+              if ($null -eq $Body) {
+                return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers
+              }
+              return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -ContentType $ContentType -Body $Body
+            }
+            catch {
+              $message = $_.Exception.Message
+              $response = $_.Exception.Response
+              if ($null -ne $response -and $null -ne $response.GetResponseStream()) {
+                try {
+                  $reader = [System.IO.StreamReader]::new($response.GetResponseStream())
+                  $details = $reader.ReadToEnd()
+                  if (-not [string]::IsNullOrWhiteSpace($details)) { $message = "$message $details" }
+                }
+                catch {}
+              }
+              throw "Azure DevOps REST call failed for $Method $Uri. $message"
+            }
+          }
+
+          $configPath = Join-Path $env:GITHUB_WORKSPACE ".github/power-platform-project.json"
+          $config = @{}
+          if (Test-Path $configPath) {
+            $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+          }
+
+          $workItemId = Clean-Text $env:INPUT_WORK_ITEM_ID
+          if ($workItemId -notmatch '^\d+$') { throw "work_item_id is required and must be numeric." }
+
+          $organisation = Clean-Text $env:INPUT_ADO_ORG
+          if ([string]::IsNullOrWhiteSpace($organisation) -and $config.PSObject.Properties["azure_devops_organisation"]) {
+            $organisation = Clean-Text $config.azure_devops_organisation
+          }
+          if ([string]::IsNullOrWhiteSpace($organisation)) { throw "Azure DevOps organisation is required. Provide azure_devops_organisation or configure azure_devops_organisation in .github/power-platform-project.json." }
+
+          $project = Clean-Text $env:INPUT_ADO_PROJECT
+          if ([string]::IsNullOrWhiteSpace($project) -and $config.PSObject.Properties["azure_devops_project"]) {
+            $project = Clean-Text $config.azure_devops_project
+          }
+          if ([string]::IsNullOrWhiteSpace($project)) { throw "Azure DevOps project is required. Provide azure_devops_project or configure azure_devops_project in .github/power-platform-project.json." }
+
+          if ([string]::IsNullOrWhiteSpace($env:ADO_PAT)) { throw "AZURE_DEVOPS_PAT secret is required and must contain an Azure DevOps PAT with work item read/update permissions." }
+
+          $discussion = Clean-Text $env:INPUT_DISCUSSION
+          $targetState = Clean-Text $env:INPUT_TARGET_STATE
+          $assignedTo = Clean-Text $env:INPUT_ASSIGNED_TO
+          $requestedTags = @(Split-Tags $env:INPUT_TAGS)
+          $prUrl = Clean-Text $env:INPUT_GITHUB_PR_URL
+          $commitUrl = Clean-Text $env:INPUT_GITHUB_COMMIT_URL
+
+          $noteLines = @()
+          if (-not [string]::IsNullOrWhiteSpace($discussion)) { $noteLines += $discussion }
+          $linkLines = @()
+          if (-not [string]::IsNullOrWhiteSpace($prUrl)) { $linkLines += "- GitHub PR: $prUrl" }
+          if (-not [string]::IsNullOrWhiteSpace($commitUrl)) { $linkLines += "- GitHub commit: $commitUrl" }
+          if ($linkLines.Count -gt 0) {
+            if ($noteLines.Count -gt 0) { $noteLines += "" }
+            $noteLines += "Links:"
+            $noteLines += $linkLines
+          }
+          $historyNote = Clean-Text ($noteLines -join "`n")
+
+          if ([string]::IsNullOrWhiteSpace($historyNote) -and [string]::IsNullOrWhiteSpace($targetState) -and [string]::IsNullOrWhiteSpace($assignedTo) -and $requestedTags.Count -eq 0) {
+            throw "No Azure DevOps update inputs were provided. Add discussion text, a PR/commit link, target_state, assigned_to, or tags."
+          }
+
+          $baseUri = Get-AdoBaseUri -Organisation $organisation -Project $project
+          $workItemUrl = "$baseUri/_workitems/edit/$workItemId"
+          $script:BasicToken = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$env:ADO_PAT"))
+
+          $workItemApi = "$baseUri/_apis/wit/workitems/$workItemId?`$expand=fields&api-version=7.1"
+          $workItem = Invoke-AdoRest -Method Get -Uri $workItemApi
+
+          $operations = New-Object System.Collections.Generic.List[object]
+          $changes = New-Object System.Collections.Generic.List[string]
+
+          if (-not [string]::IsNullOrWhiteSpace($historyNote)) {
+            $operations.Add([ordered]@{ op = "add"; path = "/fields/System.History"; value = $historyNote })
+            $changes.Add("discussion")
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($targetState)) {
+            $currentState = Get-FieldValue $workItem "System.State"
+            $workItemType = Get-FieldValue $workItem "System.WorkItemType"
+            if ([string]::IsNullOrWhiteSpace($workItemType)) { throw "Could not determine work item type for state validation." }
+
+            $encodedType = [uri]::EscapeDataString($workItemType)
+            $statesApi = "$baseUri/_apis/wit/workitemtypes/$encodedType/states?api-version=7.1"
+            $states = Invoke-AdoRest -Method Get -Uri $statesApi
+            $validStates = @($states.value | ForEach-Object { [string]$_.name } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            $canonicalState = @($validStates | Where-Object { $_ -ieq $targetState } | Select-Object -First 1)
+            if ($canonicalState.Count -eq 0) {
+              throw "Invalid target_state '$targetState' for work item type '$workItemType'. Valid states: $($validStates -join ', ')."
+            }
+
+            if ($currentState -ine $canonicalState[0]) {
+              $operations.Add([ordered]@{ op = "add"; path = "/fields/System.State"; value = $canonicalState[0] })
+              $changes.Add("state")
+            }
+            else {
+              Write-Host "Requested state '$($canonicalState[0])' already matches the work item state. Skipping state update."
+            }
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($assignedTo)) {
+            $currentAssignedTo = Get-FieldValue $workItem "System.AssignedTo"
+            if ($currentAssignedTo -ine $assignedTo) {
+              $operations.Add([ordered]@{ op = "add"; path = "/fields/System.AssignedTo"; value = $assignedTo })
+              $changes.Add("assignment")
+            }
+            else {
+              Write-Host "Requested assigned_to already matches the work item assignment. Skipping assignment update."
+            }
+          }
+
+          if ($requestedTags.Count -gt 0) {
+            $existingTags = @(Split-Tags (Get-FieldValue $workItem "System.Tags"))
+            $tagMap = @{}
+            $mergedTags = New-Object System.Collections.Generic.List[string]
+            foreach ($tag in $existingTags) {
+              $key = $tag.ToLowerInvariant()
+              if (-not $tagMap.ContainsKey($key)) {
+                $tagMap[$key] = $true
+                $mergedTags.Add($tag)
+              }
+            }
+            $addedTagCount = 0
+            foreach ($tag in $requestedTags) {
+              $key = $tag.ToLowerInvariant()
+              if (-not $tagMap.ContainsKey($key)) {
+                $tagMap[$key] = $true
+                $mergedTags.Add($tag)
+                $addedTagCount++
+              }
+            }
+            if ($addedTagCount -gt 0) {
+              $operations.Add([ordered]@{ op = "add"; path = "/fields/System.Tags"; value = ($mergedTags -join "; ") })
+              $changes.Add("tags")
+            }
+            else {
+              Write-Host "All requested tags already exist on the work item. Skipping tag update."
+            }
+          }
+
+          if ($operations.Count -eq 0) {
+            Write-Host "No Azure DevOps changes were needed; no JSON Patch request was sent."
+            "updated=false" >> $env:GITHUB_OUTPUT
+            "work_item_url=$workItemUrl" >> $env:GITHUB_OUTPUT
+            "changes=" >> $env:GITHUB_OUTPUT
+            "### Azure DevOps work item update" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "- Work item: [$workItemId]($workItemUrl)" >> $env:GITHUB_STEP_SUMMARY
+            "- Result: no changes needed" >> $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+
+          $patchBody = ConvertTo-Json -InputObject @($operations.ToArray()) -Depth 10 -Compress
+          $patchApi = "$baseUri/_apis/wit/workitems/$workItemId?api-version=7.1"
+          Invoke-AdoRest -Method Patch -Uri $patchApi -Body $patchBody -ContentType "application/json-patch+json" | Out-Null
+
+          $changeText = ($changes.ToArray() -join ", ")
+          "updated=true" >> $env:GITHUB_OUTPUT
+          "work_item_url=$workItemUrl" >> $env:GITHUB_OUTPUT
+          "changes=$changeText" >> $env:GITHUB_OUTPUT
+
+          "### Azure DevOps work item update" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "- Work item: [$workItemId]($workItemUrl)" >> $env:GITHUB_STEP_SUMMARY
+          "- Changes: $changeText" >> $env:GITHUB_STEP_SUMMARY
